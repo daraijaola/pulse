@@ -1,0 +1,62 @@
+/* =========================================================
+   PULSE THEME TOKENS
+   Swap these values for your creative direction.
+   Default = Solana-aligned (purple + green + dark crypto)
+   ========================================================= */
+
+:root {
+  /* Brand (Solana-ish defaults — change freely) */
+  --bg: #0a0a0f;
+  --bg-elevated: #12121a;
+  --bg-card: #16161f;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(153, 69, 255, 0.45);
+
+  --text: #f4f4f8;
+  --text-muted: #9b9bb0;
+  --text-dim: #6b6b80;
+
+  /* Solana purple + green accents */
+  --accent: #9945ff;
+  --accent-2: #14f195;
+  --accent-hot: #ff6b9d;
+  --danger: #ff4d6a;
+  --success: #14f195;
+  --warning: #ffc857;
+
+  --gradient-brand: linear-gradient(135deg, #9945ff 0%, #14f195 100%);
+  --gradient-glow: radial-gradient(
+    ellipse 80% 50% at 50% 0%,
+    rgba(153, 69, 255, 0.22),
+    transparent 70%
+  );
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-full: 999px;
+
+  --font: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
+
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+
+  --tap-size: 72px;
+  --shadow-glow: 0 0 40px rgba(153, 69, 255, 0.35);
+}
+
+/* Optional alternate skins — toggle class on <html> when you pick a theme */
+html.theme-neon {
+  --accent: #00f0ff;
+  --accent-2: #ff00aa;
+  --gradient-brand: linear-gradient(135deg, #00f0ff, #ff00aa);
+  --shadow-glow: 0 0 40px rgba(0, 240, 255, 0.35);
+}
+
+html.theme-ember {
+  --accent: #ff6b2c;
+  --accent-2: #ffd166;
+  --gradient-brand: linear-gradient(135deg, #ff6b2c, #ffd166);
+  --shadow-glow: 0 0 40px rgba(255, 107, 44, 0.35);
+}
