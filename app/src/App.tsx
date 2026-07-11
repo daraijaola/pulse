@@ -47,6 +47,42 @@ function ArrowIcon() {
   );
 }
 
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect
+        x="8"
+        y="8"
+        width="11"
+        height="13"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function RoomCodeGlyphs({ code }: { code: string }) {
+  return (
+    <div className="lobby-vault__glyphs" aria-hidden>
+      {code.split("").map((ch, i) => (
+        <span
+          key={`${ch}-${i}`}
+          className="lobby-vault__glyph"
+          style={{ animationDelay: `${0.08 + i * 0.07}s` }}
+        >
+          {ch}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function Keycap({
   children,
   tone = "light",
@@ -567,55 +603,113 @@ export default function App() {
         </main>
       )}
 
-      {/* ═══════════ LOBBY — share code, matchup, start (FE mock) ═══════════ */}
+      {/* ═══════════ LOBBY — code vault, versus, pre-round rail (FE mock) ═══════════ */}
       {screen === "lobby" && (
         <main className="flow flow-lobby">
           <div className="flow-stack">
-            <header className="flow-intro flow-intro--tight">
-              <p className="flow-kicker">Room ready</p>
-              <h1 className="flow-title">
-                Share
+            <header className="lobby-intro">
+              <p className="flow-kicker">Room armed</p>
+              <h1 className="lobby-headline">
+                Drop the
                 <br />
-                the code.
+                <span className="lobby-headline__accent">code.</span>
               </h1>
+              <p className="lobby-lede">
+                Share with a friend or run solo against Ghost.
+              </p>
             </header>
 
-            <section className="lobby-code">
-              <div className="lobby-code__row">
-                <span className="flow-label">Room code</span>
-                <button
-                  type="button"
-                  className="lobby-code__copy"
-                  onClick={copyRoomCode}
-                >
-                  {codeCopied ? "Copied" : "Copy code"}
-                </button>
+            <section className="lobby-vault" aria-labelledby="lobby-code-label">
+              <div className="lobby-vault__status">
+                <span className="lobby-vault__pulse" aria-hidden />
+                {isHost ? "Hosting" : "Joined"} · waiting for pulse
               </div>
-              <p
-                className="lobby-code__value"
-                aria-label={`Room code ${roomCode}`}
-              >
-                {roomCode}
-              </p>
+
+              <div className="lobby-vault__frame">
+                <span className="lobby-vault__corner lobby-vault__corner--tl" />
+                <span className="lobby-vault__corner lobby-vault__corner--tr" />
+                <span className="lobby-vault__corner lobby-vault__corner--bl" />
+                <span className="lobby-vault__corner lobby-vault__corner--br" />
+
+                <div className="lobby-vault__ring" aria-hidden />
+
+                <div className="lobby-vault__body">
+                  <span className="flow-label" id="lobby-code-label">
+                    Room code
+                  </span>
+                  <p
+                    className="lobby-vault__value"
+                    aria-label={`Room code ${roomCode}`}
+                  >
+                    {roomCode}
+                  </p>
+                  <RoomCodeGlyphs code={roomCode} />
+                  <button
+                    type="button"
+                    className={`lobby-vault__copy ${codeCopied ? "is-copied" : ""}`}
+                    onClick={copyRoomCode}
+                  >
+                    <CopyIcon />
+                    <span>{codeCopied ? "Copied" : "Copy code"}</span>
+                  </button>
+                </div>
+              </div>
             </section>
 
-            <section className="matchup" aria-label="Players in room">
-              <article className="matchup-card matchup-card--you">
-                <span className="matchup-card__role">You</span>
-                <span className="matchup-card__state">Ready</span>
-                <span className="matchup-card__meta">
+            <section className="lobby-versus" aria-label="Players in room">
+              <article className="lobby-fighter lobby-fighter--you">
+                <div className="lobby-fighter__top">
+                  <span className="lobby-fighter__dot" aria-hidden />
+                  <span className="lobby-fighter__state">Ready</span>
+                </div>
+                <span className="lobby-fighter__name">You</span>
+                <span className="lobby-fighter__tag">
                   {isHost ? "Host" : "Joined"}
                 </span>
               </article>
-              <article className="matchup-card matchup-card--ghost">
-                <span className="matchup-card__role">Opponent</span>
-                <span className="matchup-card__state">Ghost</span>
-                <span className="matchup-card__meta">Solo demo</span>
+
+              <div className="lobby-versus__mid" aria-hidden>
+                <span className="lobby-versus__line" />
+                <span className="lobby-versus__badge">VS</span>
+                <span className="lobby-versus__line" />
+              </div>
+
+              <article className="lobby-fighter lobby-fighter--ghost">
+                <div className="lobby-fighter__top">
+                  <span className="lobby-fighter__ghost-keys" aria-hidden>
+                    <Keycap tone="dark" size="sm">
+                      G
+                    </Keycap>
+                  </span>
+                  <span className="lobby-fighter__state">Ghost</span>
+                </div>
+                <span className="lobby-fighter__name">Opponent</span>
+                <span className="lobby-fighter__tag">Solo demo</span>
               </article>
             </section>
 
-            <p className="flow-hint">
-              Next: delegate room to Ephemeral Rollup when you start.
+            <ol className="lobby-pipeline" aria-label="Pre-round steps">
+              <li className="is-done">
+                <span className="lobby-pipeline__idx">01</span>
+                <span className="lobby-pipeline__label">Share</span>
+              </li>
+              <li className="is-active">
+                <span className="lobby-pipeline__idx">02</span>
+                <span className="lobby-pipeline__label">Ready</span>
+              </li>
+              <li>
+                <span className="lobby-pipeline__idx">03</span>
+                <span className="lobby-pipeline__label">Delegate</span>
+              </li>
+              <li>
+                <span className="lobby-pipeline__idx">04</span>
+                <span className="lobby-pipeline__label">Pulse</span>
+              </li>
+            </ol>
+
+            <p className="lobby-er-hint">
+              Next: room delegates to <strong>Ephemeral Rollup</strong> on
+              start.
             </p>
 
             <div className="flow-actions">
