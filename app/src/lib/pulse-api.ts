@@ -1,14 +1,17 @@
 /**
- * PULSE game client API.
- * Mock implementation now — swap bodies for Anchor + ER when program is live.
- * Arena/Result FE should call only these methods (stable surface).
+ * PULSE game client — mock by default, on-chain when wallet + program ready.
  */
 
 import { config } from "./config";
 import { makeRoomCode, saveSession } from "./session-store";
 import type { RoomState, RoundPhase, RoundState } from "./types";
-import { onchainCreateRoom } from "./pulse-onchain";
-// onchainStartRound / onchainTapSolo / onchainSettle ready for Arena wire-up
+import {
+  onchainCreateRoom,
+  onchainStartRound,
+  onchainTapSolo,
+  onchainSettle,
+} from "./pulse-onchain";
+import { getConnectedPublicKey } from "./wallet";
 
 function ghostSeat(name = "Ghost"): RoomState["opponent"] {
   return {
@@ -24,7 +27,7 @@ function ghostSeat(name = "Ghost"): RoomState["opponent"] {
 function youSeat(pk: string | null): RoomState["you"] {
   return {
     publicKey: pk,
-    displayName: pk ? "You" : "You",
+    displayName: "You",
     isGhost: false,
     ready: true,
     score: 0,
@@ -32,23 +35,28 @@ function youSeat(pk: string | null): RoomState["you"] {
   };
 }
 
-/** Create room — on-chain when wallet connected, else local mock */
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Create room — on-chain when wallet connected */
 export async function createRoom(hostPk: string | null): Promise<RoomState> {
-  if (hostPk && config.programId) {
+  const pk = hostPk || getConnectedPublicKey();
+  if (pk && config.programId) {
     try {
-      const { room, signature } = await onchainCreateRoom(hostPk);
-      console.info("[pulse] create_room on-chain", signature, room.code);
+      const { room, signature } = await onchainCreateRoom(pk);
+      console.info("[pulse] create_room", signature, room.code);
       return room;
     } catch (e) {
-      console.warn("[pulse] create_room on-chain failed, falling back to mock", e);
+      console.warn("[pulse] create_room on-chain failed → mock", e);
     }
   }
   const code = makeRoomCode(4);
   const room: RoomState = {
     code,
-    host: hostPk,
+    host: pk,
     status: "ready",
-    you: youSeat(hostPk),
+    you: youSeat(pk),
     opponent: ghostSeat(),
     createdAt: Date.now(),
   };
@@ -56,7 +64,6 @@ export async function createRoom(hostPk: string | null): Promise<RoomState> {
   return room;
 }
 
-/** Join by code (mock — always succeeds if code length ok) */
 export async function joinRoom(
   code: string,
   playerPk: string | null,
@@ -67,7 +74,7 @@ export async function joinRoom(
     code: clean,
     host: null,
     status: "ready",
-    you: youSeat(playerPk),
+    you: youSeat(playerPk || getConnectedPublicKey()),
     opponent: ghostSeat("Host"),
     createdAt: Date.now(),
   };
@@ -75,27 +82,41 @@ export async function joinRoom(
   return room;
 }
 
-/**
- * Mock round pipeline matching FE phases.
- * Real path later: delegate → VRF request → wait → GO → tap ix → settle.
- */
 export type RoundCallbacks = {
   onPhase: (phase: RoundPhase) => void;
 };
 
-export async function runMockRound(
+/**
+ * Start a round through phases. Calls on-chain start_round when possible.
+ */
+export async function runRound(
   roomCode: string,
   cb: RoundCallbacks,
 ): Promise<RoundState> {
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const pk = getConnectedPublicKey();
+  const sigs: RoundState["sigs"] = {};
 
   cb.onPhase("delegating");
-  await sleep(700);
+  await sleep(500);
+
   cb.onPhase("vrf");
-  await sleep(800);
+  if (pk && config.programId) {
+    try {
+      // go_delay_ms=0 — client still does UX wait for tension
+      sigs.vrf = await onchainStartRound(roomCode, pk, 0);
+      console.info("[pulse] start_round", sigs.vrf);
+    } catch (e) {
+      console.warn("[pulse] start_round failed → continue mock phases", e);
+      sigs.vrf = "mock-start";
+    }
+  } else {
+    sigs.vrf = "mock-start";
+  }
+  await sleep(600);
+
   cb.onPhase("waiting");
-  // fair-ish delay stand-in for VRF
-  await sleep(600 + Math.random() * 900);
+  await sleep(700 + Math.random() * 900);
+
   const goAt = performance.now();
   cb.onPhase("go");
 
@@ -108,17 +129,14 @@ export async function runMockRound(
     youMs: null,
     oppMs: null,
     winner: null,
-    sigs: config.useMockChain
-      ? { delegate: "mock-delegate", vrf: "mock-vrf" }
-      : undefined,
+    sigs,
   };
 }
 
-/** Resolve scores after user tap (ghost reaction for solo) */
-export function resolveTap(
-  round: RoundState,
-  reactionMs: number,
-): RoundState {
+/** @deprecated use runRound */
+export const runMockRound = runRound;
+
+export function resolveTap(round: RoundState, reactionMs: number): RoundState {
   const ghostMs = 120 + Math.floor(Math.random() * 280);
   const youScore = Math.max(10, 1000 - reactionMs);
   const oppScore = Math.max(10, 1000 - ghostMs);
@@ -132,26 +150,41 @@ export function resolveTap(
     youScore,
     oppScore,
     winner,
-    sigs: {
-      ...round.sigs,
-      tap: config.useMockChain ? "mock-tap" : undefined,
-    },
+    sigs: { ...round.sigs },
   };
 }
 
+/**
+ * After tap: write scores on-chain (tap_solo + settle) when wallet present.
+ */
 export async function settleRound(round: RoundState): Promise<RoundState> {
-  // Real: commit + undelegate on ER → base
-  await new Promise((r) => setTimeout(r, 500));
+  const pk = getConnectedPublicKey();
+  const hostMs = round.youMs ?? 1;
+  const ghostMs = round.oppMs ?? 200;
+  const sigs = { ...round.sigs };
+
+  if (pk && config.programId && round.roomCode) {
+    try {
+      sigs.tap = await onchainTapSolo(round.roomCode, pk, hostMs, ghostMs);
+      console.info("[pulse] tap_solo", sigs.tap);
+      sigs.settle = await onchainSettle(round.roomCode, pk);
+      console.info("[pulse] settle", sigs.settle);
+    } catch (e) {
+      console.warn("[pulse] settle path failed", e);
+      sigs.settle = "mock-settle";
+    }
+  } else {
+    await sleep(400);
+    sigs.settle = "mock-settle";
+  }
+
   return {
     ...round,
     phase: "done",
-    sigs: {
-      ...round.sigs,
-      settle: config.useMockChain ? "mock-settle" : undefined,
-    },
+    sigs,
   };
 }
 
 export function isMockMode(): boolean {
-  return config.useMockChain || !config.programId;
+  return !getConnectedPublicKey() || !config.programId;
 }

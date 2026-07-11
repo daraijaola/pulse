@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { loadSession, saveSession } from "./lib/session-store";
+import {
+  createRoom as apiCreateRoom,
+  runRound,
+  resolveTap,
+  settleRound,
+} from "./lib/pulse-api";
+import { useWallet } from "./hooks/useWallet";
+import { WalletButton } from "./components/connect/WalletButton";
+import { NetworkStatus } from "./components/connect/NetworkStatus";
+import type { RoundState } from "./lib/types";
 import "./App.css";
 
 const SESSION_KEY = "pulse-flow";
@@ -221,6 +231,11 @@ export default function App() {
   >("wait");
   const [heroMs, setHeroMs] = useState(127);
   const [bootKeys, setBootKeys] = useState(0);
+  const [chainBusy, setChainBusy] = useState(false);
+  const [lastSigs, setLastSigs] = useState<RoundState["sigs"]>(undefined);
+  const [chainError, setChainError] = useState<string | null>(null);
+  const roundRef = useRef<RoundState | null>(null);
+  const wallet = useWallet();
 
   const nameLocked = lockedName.trim().length >= MIN_PLAYER_NAME;
   const displayName = nameLocked ? lockedName.trim() : "Player";
@@ -302,11 +317,6 @@ export default function App() {
   function clearRoundTimers() {
     roundTimers.current.forEach(window.clearTimeout);
     roundTimers.current = [];
-  }
-
-  function scheduleRound(fn: () => void, delay: number) {
-    const id = window.setTimeout(fn, delay);
-    roundTimers.current.push(id);
   }
 
   function navigateFlow(target: Screen) {
@@ -487,8 +497,31 @@ export default function App() {
     setGhostMs(null);
   }
 
-  function createRoom() {
-    enterLobby(true);
+  async function createRoom() {
+    if (!hasValidPlayer) return;
+    setChainError(null);
+    setChainBusy(true);
+    try {
+      const room = await apiCreateRoom(wallet.publicKey);
+      setIsHost(true);
+      setRoomCode(room.code);
+      setJoinInput("");
+      setCodeCopied(false);
+      setRoundComplete(false);
+      setFlowUnlocked((u) => Math.max(u, 1));
+      setScreen("lobby");
+      setPhase("idle");
+      setYouScore(0);
+      setOppScore(0);
+      setMs(null);
+      setGhostMs(null);
+      setLastSigs(undefined);
+    } catch (e) {
+      setChainError(e instanceof Error ? e.message : String(e));
+      enterLobby(true);
+    } finally {
+      setChainBusy(false);
+    }
   }
 
   function joinRoom() {
@@ -507,9 +540,11 @@ export default function App() {
     }
   }
 
-  function startRound() {
-    if (!hasValidPlayer || !roomCode) return;
+  async function startRound() {
+    if (!hasValidPlayer || !roomCode || chainBusy) return;
     clearRoundTimers();
+    setChainError(null);
+    setChainBusy(true);
     setRoundComplete(false);
     setFlowUnlocked((u) => Math.max(u, 2));
     setScreen("arena");
@@ -518,33 +553,72 @@ export default function App() {
     setOppScore(0);
     setMs(null);
     setGhostMs(null);
+    setLastSigs(undefined);
+    roundRef.current = null;
 
-    scheduleRound(() => setPhase("vrf"), 900);
-    scheduleRound(() => setPhase("waiting"), 1800);
-    scheduleRound(() => {
+    try {
+      const round = await runRound(roomCode, {
+        onPhase: (p) => setPhase(p as DemoPhase),
+      });
+      roundRef.current = round;
+      setLastSigs(round.sigs);
       setPhase("go");
       (window as unknown as { __pulseGoAt?: number }).__pulseGoAt =
-        performance.now();
-    }, 1800 + 900 + Math.random() * 1100);
+        round.goAtMs ?? performance.now();
+    } catch (e) {
+      setChainError(e instanceof Error ? e.message : String(e));
+      setPhase("idle");
+    } finally {
+      setChainBusy(false);
+    }
   }
 
-  function onTap() {
-    if (phase !== "go") return;
+  async function onTap() {
+    if (phase !== "go" || chainBusy) return;
     const goAt = (window as unknown as { __pulseGoAt?: number }).__pulseGoAt;
     const reaction = goAt ? Math.round(performance.now() - goAt) : 0;
     setMs(reaction);
     setPhase("tapped");
-    setYouScore(reaction > 0 ? Math.max(10, 1000 - reaction) : 500);
-    const ghost = 120 + Math.floor(Math.random() * 280);
-    setGhostMs(ghost);
-    setOppScore(Math.max(10, 1000 - ghost));
-    scheduleRound(() => setPhase("settling"), 700);
-    scheduleRound(() => {
-      setWon(reaction > 0 && reaction <= ghost);
+    setChainBusy(true);
+    setChainError(null);
+
+    const base =
+      roundRef.current ??
+      ({
+        roomCode,
+        phase: "go" as const,
+        goAtMs: goAt ?? null,
+        youScore: 0,
+        oppScore: 0,
+        youMs: null,
+        oppMs: null,
+        winner: null,
+        sigs: lastSigs,
+      } satisfies RoundState);
+
+    const tapped = resolveTap(base, reaction > 0 ? reaction : 1);
+    setYouScore(tapped.youScore);
+    setOppScore(tapped.oppScore);
+    setGhostMs(tapped.oppMs);
+    setWon(tapped.winner === "you");
+    roundRef.current = tapped;
+
+    setPhase("settling");
+    try {
+      const done = await settleRound(tapped);
+      roundRef.current = done;
+      setLastSigs(done.sigs);
       setRoundComplete(true);
       setFlowUnlocked((u) => Math.max(u, 3));
       setScreen("result");
-    }, 1600);
+    } catch (e) {
+      setChainError(e instanceof Error ? e.message : String(e));
+      setRoundComplete(true);
+      setFlowUnlocked((u) => Math.max(u, 3));
+      setScreen("result");
+    } finally {
+      setChainBusy(false);
+    }
   }
 
   function backHome() {
@@ -622,6 +696,10 @@ export default function App() {
           >
             PULSE
           </button>
+          <div className="shell-nav__chain">
+            <NetworkStatus />
+            <WalletButton />
+          </div>
           <nav className="shell-nav__tabs" aria-label="Game flow">
             {(
               [
@@ -1153,8 +1231,51 @@ export default function App() {
             <section className="result-chamber" aria-label="Round result">
               <div className="result-chamber__status">
                 {won ? "Winner locked" : "Round complete"} ·{" "}
-                {ms != null ? `${ms}ms reaction` : "—"} · settling on Solana
+                {ms != null ? `${ms}ms reaction` : "—"}
+                {lastSigs?.settle
+                  ? lastSigs.settle.startsWith("mock")
+                    ? " · mock settle"
+                    : " · on-chain settle"
+                  : ""}
               </div>
+              {lastSigs && (
+                <div className="result-sigs">
+                  {lastSigs.vrf && !String(lastSigs.vrf).startsWith("mock") && (
+                    <a
+                      className="result-sigs__link"
+                      href={`https://explorer.solana.com/tx/${lastSigs.vrf}?cluster=devnet`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      start_round tx
+                    </a>
+                  )}
+                  {lastSigs.tap && !String(lastSigs.tap).startsWith("mock") && (
+                    <a
+                      className="result-sigs__link"
+                      href={`https://explorer.solana.com/tx/${lastSigs.tap}?cluster=devnet`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      tap_solo tx
+                    </a>
+                  )}
+                  {lastSigs.settle &&
+                    !String(lastSigs.settle).startsWith("mock") && (
+                      <a
+                        className="result-sigs__link"
+                        href={`https://explorer.solana.com/tx/${lastSigs.settle}?cluster=devnet`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        settle tx
+                      </a>
+                    )}
+                </div>
+              )}
+              {chainError && (
+                <p className="chain-error">{chainError}</p>
+              )}
 
               <div className="result-chamber__frame">
                 <span className="result-chamber__corner result-chamber__corner--tl" />
