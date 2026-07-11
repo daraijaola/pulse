@@ -44,4 +44,6 @@ export function getPreferredConnection(): Connection {
   }
 }
 
-export { findRoomPda, codeToBytes, getProgramId, ROOM_SEED, getErValidatorPubkey };
+export { getProgramId } from "./program";
+export { findRoomPda, codeToBytes, ROOM_SEED } from "./program";
+export { getErValidatorPubkey } from "./er";
