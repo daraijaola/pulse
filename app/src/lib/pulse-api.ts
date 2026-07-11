@@ -7,7 +7,8 @@
 import { config } from "./config";
 import { makeRoomCode, saveSession } from "./session-store";
 import type { RoomState, RoundPhase, RoundState } from "./types";
-import { onchainCreateRoom, onchainStartRound, onchainTapSolo, onchainSettle } from "./pulse-onchain";
+import { onchainCreateRoom } from "./pulse-onchain";
+// onchainStartRound / onchainTapSolo / onchainSettle ready for Arena wire-up
 
 function ghostSeat(name = "Ghost"): RoomState["opponent"] {
   return {

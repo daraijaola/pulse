@@ -5,44 +5,22 @@
  * Instruction discriminators will come from IDL after `anchor build`.
  */
 
-import {
-  Connection,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-  TransactionInstruction,
-  type Signer,
-} from "@solana/web3.js";
+import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { config } from "./config";
-import { codeToBytes, findRoomPda, getProgramId, ROOM_SEED } from "./program";
+import { getProgramId } from "./program";
 import { getBaseConnection, getRouterConnection } from "./solana";
-import { getErValidatorPubkey } from "./er";
 
 export function isProgramConfigured(): boolean {
   return Boolean(config.programId) && config.programId.length >= 32;
 }
 
-/** Anchor sha256("global:create_room")[0..8] — replace with IDL after build */
-// These placeholders are WRONG until generated from IDL.
-// After deploy, run: anchor idl parse → copy discriminators or use @coral-xyz/anchor Program.
-
-export type BuiltIx = {
-  ix: TransactionInstruction;
-  roomPda: PublicKey;
-};
-
-/**
- * Temporary: builds nothing useful without IDL.
- * After `anchor build`, generate client with:
- *   anchor idl build -o app/src/idl/pulse.json
- * and switch this file to Program methods.
- */
 export function assertReadyForChain(): void {
   if (!isProgramConfigured()) {
     throw new Error(
       "Program not deployed. Set VITE_PULSE_PROGRAM_ID after anchor deploy.",
     );
   }
+  void getProgramId();
 }
 
 export async function sendWithWallet(
