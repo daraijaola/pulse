@@ -4,8 +4,8 @@
   "description": "Real-time mobile reaction battles on Solana",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#0a0a0f",
+  "background_color": "#f7f7f7",
+  "theme_color": "#000f1d",
   "orientation": "portrait",
   "icons": [
     {

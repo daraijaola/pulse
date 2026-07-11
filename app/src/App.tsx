@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import "./App.css";
 
 type Screen = "home" | "lobby" | "arena" | "result";
@@ -19,6 +19,49 @@ function makeRoomCode() {
     out += alphabet[Math.floor(Math.random() * alphabet.length)];
   }
   return out;
+}
+
+function ArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M5 12h12M13 6l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="square"
+      />
+    </svg>
+  );
+}
+
+function Btn({
+  variant = "primary",
+  children,
+  onClick,
+  disabled,
+  type = "button",
+}: {
+  variant?: "primary" | "secondary" | "ghost";
+  children: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  type?: "button" | "submit";
+}) {
+  return (
+    <button
+      type={type}
+      className={`btn btn-${variant}`}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <span className="btn-inner">{children}</span>
+      {variant !== "ghost" && (
+        <span className="btn-icon">
+          <ArrowIcon />
+        </span>
+      )}
+    </button>
+  );
 }
 
 export default function App() {
@@ -44,21 +87,21 @@ export default function App() {
       case "vrf":
         return (
           <>
-            Requesting fair pulse via <strong>MagicBlock VRF</strong>
+            Fair pulse via <strong>MagicBlock VRF</strong>
           </>
         );
       case "waiting":
-        return "Wait for the pulse… don’t early-tap";
+        return "Wait for the pulse — no early tap";
       case "go":
         return (
           <>
-            <strong>GO!</strong> Tap now
+            <strong>GO</strong> — tap now
           </>
         );
       case "tapped":
         return ms != null ? (
           <>
-            Reaction <strong>{ms}ms</strong> (UI preview)
+            Reaction <strong>{ms}ms</strong>
           </>
         ) : (
           "Score locked"
@@ -66,7 +109,7 @@ export default function App() {
       case "settling":
         return (
           <>
-            Committing result → <strong>Solana base layer</strong>
+            Commit → <strong>Solana base layer</strong>
           </>
         );
       default:
@@ -75,8 +118,7 @@ export default function App() {
   }, [phase, ms]);
 
   function createRoom() {
-    const code = makeRoomCode();
-    setRoomCode(code);
+    setRoomCode(makeRoomCode());
     setScreen("lobby");
     setPhase("idle");
     setYouScore(0);
@@ -99,13 +141,12 @@ export default function App() {
     setOppScore(0);
     setMs(null);
 
-    // FE-only choreography so you can judge pacing/theme.
-    // Real ER + VRF wiring lands after theme lock.
     window.setTimeout(() => setPhase("vrf"), 900);
     window.setTimeout(() => setPhase("waiting"), 1800);
     window.setTimeout(() => {
       setPhase("go");
-      (window as unknown as { __pulseGoAt?: number }).__pulseGoAt = performance.now();
+      (window as unknown as { __pulseGoAt?: number }).__pulseGoAt =
+        performance.now();
     }, 1800 + 800 + Math.random() * 1200);
   }
 
@@ -116,7 +157,6 @@ export default function App() {
     setMs(reaction);
     setPhase("tapped");
     setYouScore(reaction > 0 ? Math.max(10, 1000 - reaction) : 500);
-    // ghost opponent for solo demo feel
     const ghost = 120 + Math.floor(Math.random() * 280);
     setOppScore(Math.max(10, 1000 - ghost));
     window.setTimeout(() => setPhase("settling"), 700);
@@ -138,18 +178,23 @@ export default function App() {
         <div className="brand">
           <div className="brand-mark" aria-hidden />
           <div className="brand-text">
-            <span className="brand-name">PULSE</span>
-            <span className="brand-sub">Solana · MagicBlock</span>
+            <span className="brand-name">Pulse</span>
+            <span className="brand-sub">Blitz · MagicBlock</span>
           </div>
         </div>
-        <span className={`chip ${phase === "go" || phase === "waiting" ? "live" : ""}`}>
-          {screen === "arena" ? "ER LIVE" : "DEVNET"}
+        <span
+          className={`chip ${
+            phase === "go" || phase === "waiting" ? "live" : ""
+          }`}
+        >
+          {screen === "arena" ? "ER Live" : "Devnet"}
         </span>
       </header>
 
       {screen === "home" && (
         <main className="stage">
           <div className="hero">
+            <p className="eyebrow">Solana Blitz v6 · Mobile</p>
             <h1>
               Feel the <span>pulse</span>.
               <br />
@@ -163,17 +208,20 @@ export default function App() {
 
           <div className="tech-row">
             <span className="tech er">Ephemeral Rollup</span>
-            <span className="tech">VRF fair start</span>
+            <span className="tech hot">VRF fair start</span>
             <span className="tech">Mobile-first</span>
-            <span className="tech">Solana settle</span>
+            <span className="tech pink">Solana settle</span>
           </div>
 
           <div className="card stack">
-            <h2>Start a battle</h2>
-            <p>UI shell only — wallet + onchain land after you lock theme.</p>
-            <button type="button" className="btn btn-primary" onClick={createRoom}>
-              Create room
-            </button>
+            <div className="card-head">
+              <div className="card-icon blue">01</div>
+              <div>
+                <h2 style={{ margin: 0 }}>Start a battle</h2>
+                <p>UI shell — wallet + chain after theme lock.</p>
+              </div>
+            </div>
+            <Btn onClick={createRoom}>Create room</Btn>
             <div className="row">
               <input
                 className="input"
@@ -183,19 +231,21 @@ export default function App() {
                 onChange={(e) => setJoinInput(e.target.value.toUpperCase())}
                 aria-label="Room code"
               />
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={joinRoom}
-                disabled={joinInput.trim().length < 3}
-              >
-                Join
-              </button>
             </div>
+            <Btn
+              variant="secondary"
+              onClick={joinRoom}
+              disabled={joinInput.trim().length < 3}
+            >
+              Join room
+            </Btn>
           </div>
 
-          <div className="card">
-            <h2>Demo path</h2>
+          <div className="card tint-orange">
+            <div className="card-head">
+              <div className="card-icon orange">//</div>
+              <h2 style={{ margin: 0 }}>Demo path</h2>
+            </div>
             <ul className="steps">
               <li>
                 <span className="step-num">1</span>
@@ -211,25 +261,28 @@ export default function App() {
               </li>
               <li>
                 <span className="step-num">4</span>
-                <span>TAP — score on ER — settle Solana</span>
+                <span>TAP on ER — settle to Solana</span>
               </li>
             </ul>
           </div>
 
-          <p className="footer-note">
-            Solana Blitz v6 · Theme tokens in <code>src/theme.css</code>
-          </p>
+          <p className="footer-note">Theme: Sui Overflow system · TWK Everett</p>
         </main>
       )}
 
       {screen === "lobby" && (
         <main className="stage">
           <div className="hero">
+            <p className="eyebrow">Room ready</p>
             <h1>
-              Room <span>{roomCode}</span>
+              Share
+              <br />
+              the code.
             </h1>
-            <p>Share the code. Solo works — ghost opponent fills the slot for demo.</p>
+            <p>Solo works — ghost opponent fills the slot for demo.</p>
           </div>
+
+          <div className="room-code-xl">{roomCode}</div>
 
           <div className="scoreboard">
             <div className="score-card you">
@@ -242,21 +295,24 @@ export default function App() {
             </div>
           </div>
 
-          <div className="card">
-            <h2>MagicBlock flow</h2>
-            <p>
-              Next step will call <strong>delegate</strong> on the room account,
-              then high-frequency taps hit the ER RPC.
-            </p>
+          <div className="card tint-gray">
+            <div className="card-head">
+              <div className="card-icon gray">ER</div>
+              <div>
+                <h2 style={{ margin: 0 }}>MagicBlock flow</h2>
+                <p>
+                  Next: <strong>delegate</strong> room account, then taps hit
+                  the ER RPC.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="stack">
-            <button type="button" className="btn btn-primary" onClick={startRound}>
-              Start round
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={backHome}>
+            <Btn onClick={startRound}>Start round</Btn>
+            <Btn variant="ghost" onClick={backHome}>
               Leave room
-            </button>
+            </Btn>
           </div>
         </main>
       )}
@@ -268,7 +324,11 @@ export default function App() {
           <div className="arena">
             <div
               className={`pulse-ring ${
-                phase === "go" ? "ready" : phase === "waiting" || phase === "vrf" ? "waiting" : ""
+                phase === "go"
+                  ? "ready"
+                  : phase === "waiting" || phase === "vrf"
+                    ? "waiting"
+                    : ""
               }`}
             >
               <button
@@ -302,11 +362,11 @@ export default function App() {
 
       {screen === "result" && (
         <main className="stage">
-          <div className="result-banner">
+          <div className={`result-banner ${won ? "win" : ""}`}>
             <h2>{won ? "You won the pulse" : "Ghost edged you"}</h2>
             <p>
-              {ms != null ? `Your reaction: ${ms}ms · ` : ""}
-              UI preview scores — onchain settle next.
+              {ms != null ? `Reaction ${ms}ms · ` : ""}
+              UI preview — onchain settle next
             </p>
           </div>
 
@@ -321,24 +381,58 @@ export default function App() {
             </div>
           </div>
 
-          <div className="card">
-            <h2>Judge line</h2>
-            <p>
-              Mobile UX + gasless real-time state + verifiable fairness — only
-              works because of MagicBlock ER + VRF.
-            </p>
+          <div className="card tint-pink">
+            <div className="card-head">
+              <div className="card-icon pink">MB</div>
+              <div>
+                <h2 style={{ margin: 0 }}>Judge line</h2>
+                <p>
+                  Mobile UX + gasless real-time state + verifiable fairness —
+                  only works because of MagicBlock ER + VRF.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="stack">
-            <button type="button" className="btn btn-primary" onClick={startRound}>
-              Play again
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={backHome}>
+            <Btn onClick={startRound}>Play again</Btn>
+            <Btn variant="ghost" onClick={backHome}>
               Home
-            </button>
+            </Btn>
           </div>
         </main>
       )}
+
+      <footer className="dock">
+        <div className="dock-left">
+          {screen === "home" && "Overflow theme"}
+          {screen === "lobby" && `Room ${roomCode}`}
+          {screen === "arena" && statusText}
+          {screen === "result" && (won ? "Victory" : "Retry")}
+        </div>
+        <div className="dock-right">
+          {screen === "home" && (
+            <button type="button" onClick={createRoom}>
+              Create <ArrowIcon />
+            </button>
+          )}
+          {screen === "lobby" && (
+            <button type="button" onClick={startRound}>
+              Start <ArrowIcon />
+            </button>
+          )}
+          {screen === "arena" && (
+            <button type="button" onClick={phase === "go" ? onTap : undefined}>
+              {phase === "go" ? "Tap" : "Live"} <ArrowIcon />
+            </button>
+          )}
+          {screen === "result" && (
+            <button type="button" onClick={startRound}>
+              Again <ArrowIcon />
+            </button>
+          )}
+        </div>
+      </footer>
     </div>
   );
 }

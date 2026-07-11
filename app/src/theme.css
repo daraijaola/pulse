@@ -1,62 +1,94 @@
 /* =========================================================
-   PULSE THEME TOKENS
-   Swap these values for your creative direction.
-   Default = Solana-aligned (purple + green + dark crypto)
+   PULSE ← Sui Overflow design system (exact tokens)
+   Source: https://overflow.sui.io/ (Webflow shared CSS)
    ========================================================= */
 
+@font-face {
+  font-family: "TWK Everett";
+  src: url("/fonts/TWKEverett-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "TWK Everett";
+  src: url("/fonts/TWKEverett-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "TWK Everett Mono";
+  src: url("/fonts/TWKEverettMono-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  /* Brand (Solana-ish defaults — change freely) */
-  --bg: #0a0a0f;
-  --bg-elevated: #12121a;
-  --bg-card: #16161f;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(153, 69, 255, 0.45);
+  /* —— Overflow color tokens (verbatim) —— */
+  --color--blue-400: #6de6f8;
+  --color--blue-500: deepskyblue;
+  --color--blue-700: #4da2ff;
+  --color--blue-900: #000f1d;
+  --color--dark: #000000;
+  --color--gray-200: #dfdfdf;
+  --color--gray-400: #bbbec0;
+  --color--gray-700: #61686d;
+  --color--gray-800: #31404e;
+  --color--green-200: #55db9c;
+  --color--green-300: #beff4d;
+  --color--green-400: #4df766;
+  --color--green-700: #3e512f;
+  --color--light: #f7f7f7;
+  --color--orange-200: #f2eee4;
+  --color--orange-400: #f79f4d;
+  --color--orange-700: #ff7a00;
+  --color--pink-200: #dbcdeb;
+  --color--pink-400: #e9ccff;
+  --color--pink-700: #ff6ada;
+  --color--purple-700: #5c4ade;
+  --color--yellow-700: #fffc4d;
+  --color--yellow-900: #ffd731;
 
-  --text: #f4f4f8;
-  --text-muted: #9b9bb0;
-  --text-dim: #6b6b80;
+  /* —— App aliases —— */
+  --bg: var(--color--light);
+  --bg-elevated: #ffffff;
+  --bg-card: #ffffff;
+  --bg-dark: var(--color--blue-900);
+  --text: var(--color--blue-900);
+  --text-muted: var(--color--gray-700);
+  --text-dim: var(--color--gray-400);
+  --text-on-dark: var(--color--light);
+  --accent: var(--color--blue-700);
+  --accent-hot: var(--color--orange-700);
+  --accent-pink: var(--color--pink-700);
+  --accent-green: var(--color--green-200);
+  --border: 2px solid var(--color--blue-900);
+  --border-soft: 2px solid var(--color--gray-400);
 
-  /* Solana purple + green accents */
-  --accent: #9945ff;
-  --accent-2: #14f195;
-  --accent-hot: #ff6b9d;
-  --danger: #ff4d6a;
-  --success: #14f195;
-  --warning: #ffc857;
+  --gap-xxs: 0.5em;
+  --gap-xs: 0.75em;
+  --gap-s: 0.875em;
+  --gap-m: 1em;
+  --gap-ml: 1.25em;
+  --gap-l: 1.5em;
+  --gap-xl: 2em;
+  --page-padding: 1.25em;
 
-  --gradient-brand: linear-gradient(135deg, #9945ff 0%, #14f195 100%);
-  --gradient-glow: radial-gradient(
-    ellipse 80% 50% at 50% 0%,
-    rgba(153, 69, 255, 0.22),
-    transparent 70%
-  );
+  --font: "TWK Everett", Arial, sans-serif;
+  --font-mono: "TWK Everett Mono", Arial, sans-serif;
 
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
-  --radius-full: 999px;
-
-  --font: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
-
+  --ease-overflow: cubic-bezier(0.525, 0, 0, 1);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
-
-  --tap-size: 72px;
-  --shadow-glow: 0 0 40px rgba(153, 69, 255, 0.35);
+  --tap-size: 5.5rem;
 }
 
-/* Optional alternate skins — toggle class on <html> when you pick a theme */
-html.theme-neon {
-  --accent: #00f0ff;
-  --accent-2: #ff00aa;
-  --gradient-brand: linear-gradient(135deg, #00f0ff, #ff00aa);
-  --shadow-glow: 0 0 40px rgba(0, 240, 255, 0.35);
-}
-
-html.theme-ember {
-  --accent: #ff6b2c;
-  --accent-2: #ffd166;
-  --gradient-brand: linear-gradient(135deg, #ff6b2c, #ffd166);
-  --shadow-glow: 0 0 40px rgba(255, 107, 44, 0.35);
+::selection {
+  background-color: var(--color--blue-700);
+  color: var(--color--blue-900);
+  text-shadow: none;
 }
