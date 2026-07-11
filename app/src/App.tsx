@@ -1,5 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "./App.css";
+
+const SESSION_KEY = "pulse-session";
+const MIN_PLAYER_NAME = 2;
+const MAX_PLAYER_NAME = 16;
 
 type Screen = "home" | "enter" | "lobby" | "arena" | "result";
 
@@ -33,7 +37,12 @@ function arenaStepClass(step: DemoPhase, current: DemoPhase) {
   return "";
 }
 
-function flowTabClass(target: Screen, current: Screen, live = false) {
+function flowTabClass(
+  target: Screen,
+  current: Screen,
+  live = false,
+  locked = false,
+) {
   const ti = FLOW_SCREENS.indexOf(target);
   const ci = FLOW_SCREENS.indexOf(current);
   if (ti < 0 || ci < 0) return "";
@@ -41,7 +50,15 @@ function flowTabClass(target: Screen, current: Screen, live = false) {
   if (ti === ci) parts.push("is-on");
   else if (ti < ci) parts.push("is-done");
   if (live) parts.push("is-live");
+  if (locked) parts.push("is-locked");
   return parts.join(" ");
+}
+
+function sanitizePlayerName(raw: string) {
+  return raw
+    .replace(/[^a-zA-Z0-9 _-]/g, "")
+    .replace(/\s+/g, " ")
+    .slice(0, MAX_PLAYER_NAME);
 }
 
 type DemoPhase =
@@ -181,8 +198,11 @@ function Btn({
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
+  const [playerName, setPlayerName] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [joinInput, setJoinInput] = useState("");
+  const [flowUnlocked, setFlowUnlocked] = useState(0);
+  const [roundComplete, setRoundComplete] = useState(false);
   const [phase, setPhase] = useState<DemoPhase>("idle");
   const [youScore, setYouScore] = useState(0);
   const [oppScore, setOppScore] = useState(0);
@@ -191,12 +211,98 @@ export default function App() {
   const [isHost, setIsHost] = useState(true);
   const [codeCopied, setCodeCopied] = useState(false);
   const [boot, setBoot] = useState(true);
+  const roundTimers = useRef<number[]>([]);
   /** Landing hero demo: cycles the real game feeling */
   const [heroBeat, setHeroBeat] = useState<
     "wait" | "signal" | "go" | "hit"
   >("wait");
   const [heroMs, setHeroMs] = useState(127);
   const [bootKeys, setBootKeys] = useState(0);
+
+  const displayName = useMemo(() => {
+    const trimmed = playerName.trim();
+    return trimmed.length >= MIN_PLAYER_NAME ? trimmed : "Player";
+  }, [playerName]);
+
+  const hasValidPlayer = playerName.trim().length >= MIN_PLAYER_NAME;
+
+  const isRoundLive =
+    screen === "arena" &&
+    phase !== "idle";
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as {
+        playerName?: string;
+        roomCode?: string;
+        flowUnlocked?: number;
+        isHost?: boolean;
+      };
+      if (saved.playerName) setPlayerName(saved.playerName);
+      if (saved.roomCode) setRoomCode(saved.roomCode);
+      if (typeof saved.flowUnlocked === "number") {
+        setFlowUnlocked(saved.flowUnlocked);
+      }
+      if (typeof saved.isHost === "boolean") setIsHost(saved.isHost);
+    } catch {
+      /* ignore corrupt session */
+    }
+  }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({ playerName, roomCode, flowUnlocked, isHost }),
+    );
+  }, [playerName, roomCode, flowUnlocked, isHost]);
+
+  useEffect(() => {
+    return () => {
+      roundTimers.current.forEach(window.clearTimeout);
+    };
+  }, []);
+
+  const canNavigateTo = useCallback(
+    (target: Screen) => {
+      const ti = FLOW_SCREENS.indexOf(target);
+      if (ti < 0) return false;
+      if (isRoundLive && target !== "arena") return false;
+      if (ti > flowUnlocked) return false;
+
+      if (target === "enter") return true;
+      if (target === "lobby") {
+        return hasValidPlayer && roomCode.length > 0;
+      }
+      if (target === "arena") {
+        return flowUnlocked >= 2 && !roundComplete;
+      }
+      if (target === "result") {
+        return flowUnlocked >= 3 && roundComplete;
+      }
+      return false;
+    },
+    [flowUnlocked, hasValidPlayer, isRoundLive, roomCode, roundComplete],
+  );
+
+  function clearRoundTimers() {
+    roundTimers.current.forEach(window.clearTimeout);
+    roundTimers.current = [];
+  }
+
+  function scheduleRound(fn: () => void, delay: number) {
+    const id = window.setTimeout(fn, delay);
+    roundTimers.current.push(id);
+  }
+
+  function navigateFlow(target: Screen) {
+    if (screen === target) return;
+    if (!canNavigateTo(target)) return;
+    if (screen === "arena" && isRoundLive) return;
+    if (target === "lobby") setPhase("idle");
+    setScreen(target);
+  }
 
   useEffect(() => {
     const steps = [120, 220, 320, 420, 520];
@@ -340,11 +446,14 @@ export default function App() {
     }
   }, [phase]);
 
-  function createRoom() {
-    setIsHost(true);
-    setRoomCode(makeRoomCode());
-    setJoinInput("");
+  function enterLobby(asHost: boolean, code?: string) {
+    if (!hasValidPlayer) return;
+    setIsHost(asHost);
+    setRoomCode(asHost ? makeRoomCode() : (code ?? ""));
+    if (asHost) setJoinInput("");
     setCodeCopied(false);
+    setRoundComplete(false);
+    setFlowUnlocked((u) => Math.max(u, 1));
     setScreen("lobby");
     setPhase("idle");
     setYouScore(0);
@@ -352,14 +461,14 @@ export default function App() {
     setMs(null);
   }
 
+  function createRoom() {
+    enterLobby(true);
+  }
+
   function joinRoom() {
     const code = joinInput.trim().toUpperCase();
-    if (code.length < 3) return;
-    setIsHost(false);
-    setRoomCode(code);
-    setCodeCopied(false);
-    setScreen("lobby");
-    setPhase("idle");
+    if (code.length < 3 || !hasValidPlayer) return;
+    enterLobby(false, code);
   }
 
   async function copyRoomCode() {
@@ -373,15 +482,19 @@ export default function App() {
   }
 
   function startRound() {
+    if (!hasValidPlayer || !roomCode) return;
+    clearRoundTimers();
+    setRoundComplete(false);
+    setFlowUnlocked((u) => Math.max(u, 2));
     setScreen("arena");
     setPhase("delegating");
     setYouScore(0);
     setOppScore(0);
     setMs(null);
 
-    window.setTimeout(() => setPhase("vrf"), 900);
-    window.setTimeout(() => setPhase("waiting"), 1800);
-    window.setTimeout(() => {
+    scheduleRound(() => setPhase("vrf"), 900);
+    scheduleRound(() => setPhase("waiting"), 1800);
+    scheduleRound(() => {
       setPhase("go");
       (window as unknown as { __pulseGoAt?: number }).__pulseGoAt =
         performance.now();
@@ -397,18 +510,33 @@ export default function App() {
     setYouScore(reaction > 0 ? Math.max(10, 1000 - reaction) : 500);
     const ghost = 120 + Math.floor(Math.random() * 280);
     setOppScore(Math.max(10, 1000 - ghost));
-    window.setTimeout(() => setPhase("settling"), 700);
-    window.setTimeout(() => {
+    scheduleRound(() => setPhase("settling"), 700);
+    scheduleRound(() => {
       setWon(reaction > 0 && reaction <= ghost);
+      setRoundComplete(true);
+      setFlowUnlocked((u) => Math.max(u, 3));
       setScreen("result");
     }, 1600);
   }
 
   function backHome() {
+    clearRoundTimers();
     setScreen("home");
     setPhase("idle");
     setJoinInput("");
     setCodeCopied(false);
+    setRoomCode("");
+    setFlowUnlocked(0);
+    setRoundComplete(false);
+    setYouScore(0);
+    setOppScore(0);
+    setMs(null);
+  }
+
+  function openEnter() {
+    setFlowUnlocked(0);
+    setRoundComplete(false);
+    setScreen("enter");
   }
 
   const heroTelemetry = useMemo(() => {
@@ -467,30 +595,38 @@ export default function App() {
             PULSE
           </button>
           <nav className="shell-nav__tabs" aria-label="Game flow">
-            <span
-              className={`shell-nav__tab ${flowTabClass("enter", screen)}`}
-              data-step="01"
-            >
-              Enter
-            </span>
-            <span
-              className={`shell-nav__tab ${flowTabClass("lobby", screen)}`}
-              data-step="02"
-            >
-              Lobby
-            </span>
-            <span
-              className={`shell-nav__tab ${flowTabClass("arena", screen, arenaLive)}`}
-              data-step="03"
-            >
-              Arena
-            </span>
-            <span
-              className={`shell-nav__tab ${flowTabClass("result", screen)}`}
-              data-step="04"
-            >
-              Result
-            </span>
+            {(
+              [
+                ["enter", "01", "Enter"],
+                ["lobby", "02", "Lobby"],
+                ["arena", "03", "Arena"],
+                ["result", "04", "Result"],
+              ] as const
+            ).map(([target, step, label]) => {
+              const locked =
+                !canNavigateTo(target) && screen !== target;
+              return (
+                <button
+                  key={target}
+                  type="button"
+                  className={`shell-nav__tab ${flowTabClass(target, screen, target === "arena" && arenaLive, locked)}`}
+                  data-step={step}
+                  onClick={() => navigateFlow(target)}
+                  disabled={locked}
+                  aria-current={screen === target ? "step" : undefined}
+                  aria-disabled={locked}
+                  title={
+                    locked
+                      ? isRoundLive
+                        ? "Finish the live round first"
+                        : "Complete prior steps first"
+                      : undefined
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
           </nav>
         </header>
       )}
@@ -617,7 +753,7 @@ export default function App() {
 
           <div className="l-cta-zone">
             <p className="l-cta-hint">No wallet needed to explore</p>
-            <Btn onClick={() => setScreen("enter")}>Enter arena</Btn>
+            <Btn onClick={openEnter}>Enter arena</Btn>
           </div>
         </main>
       )}
@@ -629,15 +765,60 @@ export default function App() {
             <header className="flow-intro">
               <p className="flow-kicker">Get in</p>
               <h1 className="flow-title">
-                Create or
+                Name your
                 <br />
-                join.
+                fighter.
               </h1>
-              <p className="flow-lede">One room. One pulse. First tap wins.</p>
+              <p className="flow-lede">
+                Player name locks in for this session — then create or join a
+                room.
+              </p>
             </header>
 
+            <section className="player-id" aria-labelledby="player-name-label">
+              <div className="player-id__head">
+                <span className="player-id__chip" aria-hidden>
+                  <Keycap tone="blue" size="sm">
+                    {hasValidPlayer
+                      ? displayName.charAt(0).toUpperCase()
+                      : "?"}
+                  </Keycap>
+                </span>
+                <div className="player-id__copy">
+                  <label className="flow-label" id="player-name-label">
+                    Player name
+                  </label>
+                  <p className="player-id__hint">
+                    Session call sign · shown in lobby, arena &amp; result
+                  </p>
+                </div>
+              </div>
+              <input
+                id="player-name"
+                className="name-input"
+                placeholder="Your call sign"
+                value={playerName}
+                maxLength={MAX_PLAYER_NAME}
+                autoComplete="nickname"
+                autoCapitalize="words"
+                spellCheck={false}
+                onChange={(e) =>
+                  setPlayerName(sanitizePlayerName(e.target.value))
+                }
+                aria-label="Player name"
+              />
+              {hasValidPlayer && (
+                <p className="player-id__ready">
+                  <span className="player-id__pulse" aria-hidden />
+                  Session armed as <strong>{displayName}</strong>
+                </p>
+              )}
+            </section>
+
             <section className="flow-panel">
-              <Btn onClick={createRoom}>Create room</Btn>
+              <Btn onClick={createRoom} disabled={!hasValidPlayer}>
+                Create room
+              </Btn>
               <div className="flow-split" aria-hidden>
                 <span />
                 <em>or join with code</em>
@@ -666,7 +847,9 @@ export default function App() {
               <Btn
                 variant="secondary"
                 onClick={joinRoom}
-                disabled={joinInput.trim().length < 3}
+                disabled={
+                  !hasValidPlayer || joinInput.trim().length < 3
+                }
               >
                 Join room
               </Btn>
@@ -734,7 +917,7 @@ export default function App() {
                   <span className="lobby-fighter__dot" aria-hidden />
                   <span className="lobby-fighter__state">Ready</span>
                 </div>
-                <span className="lobby-fighter__name">You</span>
+                <span className="lobby-fighter__name">{displayName}</span>
                 <span className="lobby-fighter__tag">
                   {isHost ? "Host" : "Joined"}
                 </span>
@@ -871,7 +1054,7 @@ export default function App() {
               aria-label="Live scores"
             >
               <div className="score-card you">
-                <div className="label">You</div>
+                <div className="label">{displayName}</div>
                 <div className="value">{youScore || "—"}</div>
                 {ms != null && (
                   <div className="sub">{ms}ms</div>
@@ -923,16 +1106,20 @@ export default function App() {
                 </>
               )}
             </div>
-            <h2>{won ? "You won the pulse" : "Ghost edged you"}</h2>
+            <h2>
+              {won
+                ? `${displayName} won the pulse`
+                : `Ghost edged ${displayName}`}
+            </h2>
             <p>
               {ms != null ? `Reaction ${ms}ms · ` : ""}
-              UI preview — onchain settle next
+              {displayName} · commit to Solana base (FE preview)
             </p>
           </div>
 
           <div className="scoreboard">
             <div className="score-card you">
-              <div className="label">You</div>
+              <div className="label">{displayName}</div>
               <div className="value">{youScore}</div>
               <div className="sub">{ms != null ? `${ms}ms` : "—"}</div>
             </div>
@@ -958,20 +1145,38 @@ export default function App() {
         <footer className="dock">
           <div className="dock-left">
             {screen === "enter" && (
-              <button type="button" className="dock-nav" onClick={backHome}>
-                Home
-              </button>
+              <>
+                <button type="button" className="dock-nav" onClick={backHome}>
+                  Home
+                </button>
+                {hasValidPlayer && (
+                  <span className="dock-player">{displayName}</span>
+                )}
+              </>
             )}
             {screen === "lobby" && (
               <>
                 <span className="dock-code">{roomCode}</span>
+                <span className="dock-player">{displayName}</span>
                 <button type="button" className="dock-nav" onClick={backHome}>
                   Leave
                 </button>
               </>
             )}
-            {screen === "arena" && phaseLabel}
-            {screen === "result" && (won ? "Victory" : "Retry")}
+            {screen === "arena" && (
+              <>
+                <span className="dock-player">{displayName}</span>
+                <span className="dock-phase">{phaseLabel}</span>
+              </>
+            )}
+            {screen === "result" && (
+              <>
+                <span className="dock-player">{displayName}</span>
+                <button type="button" className="dock-nav" onClick={backHome}>
+                  Home
+                </button>
+              </>
+            )}
           </div>
           <div className="dock-right">
             {screen === "enter" && (
@@ -980,6 +1185,7 @@ export default function App() {
                 onClick={
                   joinInput.trim().length >= 3 ? joinRoom : createRoom
                 }
+                disabled={!hasValidPlayer}
               >
                 {joinInput.trim().length >= 3 ? "Join" : "Create"}{" "}
                 <ArrowIcon />
