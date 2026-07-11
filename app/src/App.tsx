@@ -3,6 +3,19 @@ import "./App.css";
 
 type Screen = "home" | "enter" | "lobby" | "arena" | "result";
 
+const FLOW_SCREENS: Screen[] = ["enter", "lobby", "arena", "result"];
+
+function flowTabClass(target: Screen, current: Screen, live = false) {
+  const ti = FLOW_SCREENS.indexOf(target);
+  const ci = FLOW_SCREENS.indexOf(current);
+  if (ti < 0 || ci < 0) return "";
+  const parts: string[] = [];
+  if (ti === ci) parts.push("is-on");
+  else if (ti < ci) parts.push("is-done");
+  if (live) parts.push("is-live");
+  return parts.join(" ");
+}
+
 type DemoPhase =
   | "idle"
   | "delegating"
@@ -290,14 +303,6 @@ export default function App() {
     setCodeCopied(false);
   }
 
-  const shellStep = useMemo(() => {
-    if (screen === "enter") return "Enter";
-    if (screen === "lobby") return "Lobby";
-    if (screen === "arena") return "Arena";
-    if (screen === "result") return "Result";
-    return "";
-  }, [screen]);
-
   const heroTelemetry = useMemo(() => {
     switch (heroBeat) {
       case "wait":
@@ -339,28 +344,40 @@ export default function App() {
 
   const showChrome = screen !== "home";
 
+  const arenaLive =
+    screen === "arena" && (phase === "go" || phase === "waiting");
+
   return (
     <div className={`app screen-${screen}`}>
-      <div className="frame-glow" aria-hidden />
-
       {showChrome && (
-        <header className="shell-bar">
-          <button type="button" className="shell-bar__brand" onClick={backHome}>
+        <header className="shell-nav">
+          <button
+            type="button"
+            className="shell-nav__brand"
+            onClick={backHome}
+          >
             PULSE
           </button>
-          <span
-            className={`shell-bar__step ${
-              screen === "arena" &&
-              (phase === "go" || phase === "waiting")
-                ? "is-live"
-                : ""
-            }`}
-          >
-            {shellStep}
-          </span>
+          <nav className="shell-nav__tabs" aria-label="Game flow">
+            <span className={`shell-nav__tab ${flowTabClass("enter", screen)}`}>
+              Enter
+            </span>
+            <span className={`shell-nav__tab ${flowTabClass("lobby", screen)}`}>
+              Lobby
+            </span>
+            <span
+              className={`shell-nav__tab ${flowTabClass("arena", screen, arenaLive)}`}
+            >
+              Arena
+            </span>
+            <span className={`shell-nav__tab ${flowTabClass("result", screen)}`}>
+              Result
+            </span>
+          </nav>
         </header>
       )}
 
+      <div className="app-body">
       {/* ═══════════ LANDING ═══════════ */}
       {screen === "home" && (
         <main className={`landing beat-${heroBeat}`}>
@@ -490,40 +507,68 @@ export default function App() {
       {/* ═══════════ ENTER — create / join (FE mock, no wallet) ═══════════ */}
       {screen === "enter" && (
         <main className="flow flow-enter">
-          <h1 className="flow-title">Create or join.</h1>
+          <div className="flow-center">
+            <header className="flow-intro">
+              <p className="flow-kicker">Get in</p>
+              <h1 className="flow-title">
+                Create or
+                <br />
+                join.
+              </h1>
+              <p className="flow-lede">One room. One pulse. First tap wins.</p>
+            </header>
 
-          <section className="flow-panel">
-            <Btn onClick={createRoom}>Create room</Btn>
-            <p className="flow-or">or</p>
-            <input
-              id="room-code"
-              className="code-input"
-              placeholder="CODE"
-              value={joinInput}
-              maxLength={6}
-              autoComplete="off"
-              autoCapitalize="characters"
-              spellCheck={false}
-              inputMode="text"
-              onChange={(e) =>
-                setJoinInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))
-              }
-              aria-label="Room code"
-            />
-            <Btn
-              variant="secondary"
-              onClick={joinRoom}
-              disabled={joinInput.trim().length < 3}
-            >
-              Join room
-            </Btn>
-          </section>
+            <section className="flow-panel">
+              <Btn onClick={createRoom}>Create room</Btn>
+              <div className="flow-split" aria-hidden>
+                <span />
+                <em>or join with code</em>
+                <span />
+              </div>
+              <label className="flow-label" htmlFor="room-code">
+                Room code
+              </label>
+              <input
+                id="room-code"
+                className="code-input"
+                placeholder="ABCD"
+                value={joinInput}
+                maxLength={6}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                inputMode="text"
+                onChange={(e) =>
+                  setJoinInput(
+                    e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                  )
+                }
+                aria-label="Room code"
+              />
+              <Btn
+                variant="secondary"
+                onClick={joinRoom}
+                disabled={joinInput.trim().length < 3}
+              >
+                Join room
+              </Btn>
+            </section>
+          </div>
         </main>
       )}
 
       {/* ═══════════ LOBBY — share code, matchup, start (FE mock) ═══════════ */}
       {screen === "lobby" && (
         <main className="flow flow-lobby">
+          <header className="flow-intro flow-intro--tight">
+            <p className="flow-kicker">Room ready</p>
+            <h1 className="flow-title">
+              Share
+              <br />
+              the code.
+            </h1>
+          </header>
+
           <section className="lobby-code">
             <div className="lobby-code__row">
               <span className="flow-label">Room code</span>
@@ -532,7 +577,7 @@ export default function App() {
                 className="lobby-code__copy"
                 onClick={copyRoomCode}
               >
-                {codeCopied ? "Copied" : "Copy"}
+                {codeCopied ? "Copied" : "Copy code"}
               </button>
             </div>
             <p
@@ -552,13 +597,19 @@ export default function App() {
               </span>
             </article>
             <article className="matchup-card matchup-card--ghost">
-              <span className="matchup-card__role">Ghost</span>
-              <span className="matchup-card__state">In</span>
-              <span className="matchup-card__meta">Demo</span>
+              <span className="matchup-card__role">Opponent</span>
+              <span className="matchup-card__state">Ghost</span>
+              <span className="matchup-card__meta">Solo demo</span>
             </article>
           </section>
 
-          <p className="flow-hint">Delegates to ER on start.</p>
+          <p className="flow-hint">
+            Next: delegate room to Ephemeral Rollup when you start.
+          </p>
+
+          <div className="flow-actions">
+            <Btn onClick={startRound}>Start round</Btn>
+          </div>
         </main>
       )}
 
@@ -704,6 +755,8 @@ export default function App() {
         </main>
       )}
 
+      </div>
+
       {showChrome && (
         <footer className="dock">
           <div className="dock-left">
@@ -713,9 +766,12 @@ export default function App() {
               </button>
             )}
             {screen === "lobby" && (
-              <button type="button" className="dock-nav" onClick={backHome}>
-                Leave
-              </button>
+              <>
+                <span className="dock-code">{roomCode}</span>
+                <button type="button" className="dock-nav" onClick={backHome}>
+                  Leave
+                </button>
+              </>
             )}
             {screen === "arena" && phaseLabel}
             {screen === "result" && (won ? "Victory" : "Retry")}
