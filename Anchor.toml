@@ -1,15 +1,15 @@
 [toolchain]
-anchor_version = "0.31.1"
+anchor_version = "1.0.2"
 
 [features]
 resolution = true
 skip-lint = false
 
 [programs.devnet]
-pulse = "PuLsE11111111111111111111111111111111111111"
+pulse = "2ATahSWWWkFu1j4SzbJ2RYerHR445ZqTTLCh9bWsFcip"
 
 [programs.localnet]
-pulse = "PuLsE11111111111111111111111111111111111111"
+pulse = "2ATahSWWWkFu1j4SzbJ2RYerHR445ZqTTLCh9bWsFcip"
 
 [registry]
 url = "https://api.apr.dev"

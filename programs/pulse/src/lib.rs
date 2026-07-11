@@ -6,7 +6,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
-declare_id!("PuLsE11111111111111111111111111111111111111");
+declare_id!("2ATahSWWWkFu1j4SzbJ2RYerHR445ZqTTLCh9bWsFcip");
 
 pub const ROOM_SEED: &[u8] = b"room";
 

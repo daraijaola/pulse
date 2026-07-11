@@ -7,7 +7,7 @@ import { PublicKey } from "@solana/web3.js";
 import { config } from "./config";
 
 /** Placeholder until deploy — replace via VITE_PULSE_PROGRAM_ID */
-export const DEFAULT_PROGRAM_ID = "PuLsE11111111111111111111111111111111111111";
+export const DEFAULT_PROGRAM_ID = "2ATahSWWWkFu1j4SzbJ2RYerHR445ZqTTLCh9bWsFcip";
 
 export const ROOM_SEED = "room";
 

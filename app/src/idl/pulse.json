@@ -1,0 +1,825 @@
+{
+  "address": "2ATahSWWWkFu1j4SzbJ2RYerHR445ZqTTLCh9bWsFcip",
+  "metadata": {
+    "name": "pulse",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "PULSE reaction battle on MagicBlock ER"
+  },
+  "instructions": [
+    {
+      "name": "commit_room",
+      "docs": [
+        "Commit room state from ER to base."
+      ],
+      "discriminator": [
+        138,
+        145,
+        121,
+        138,
+        83,
+        230,
+        52,
+        13
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.code",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_room",
+      "docs": [
+        "Host creates a room with a 4-byte code (ASCII, e.g. \"A3K9\")."
+      ],
+      "discriminator": [
+        130,
+        166,
+        32,
+        2,
+        247,
+        120,
+        178,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "code"
+              }
+            ]
+          }
+        },
+        {
+          "name": "host",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "code",
+          "type": {
+            "array": [
+              "u8",
+              4
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate_room",
+      "docs": [
+        "Delegate room PDA to Ephemeral Rollup for low-latency taps."
+      ],
+      "discriminator": [
+        39,
+        6,
+        122,
+        70,
+        65,
+        76,
+        166,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true
+        },
+        {
+          "name": "buffer_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                17,
+                71,
+                248,
+                44,
+                72,
+                55,
+                51,
+                204,
+                27,
+                110,
+                254,
+                163,
+                108,
+                226,
+                6,
+                135,
+                62,
+                47,
+                63,
+                50,
+                201,
+                249,
+                228,
+                92,
+                84,
+                41,
+                11,
+                143,
+                255,
+                243,
+                14,
+                85
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "code"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_program",
+          "address": "2ATahSWWWkFu1j4SzbJ2RYerHR445ZqTTLCh9bWsFcip"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "code",
+          "type": {
+            "array": [
+              "u8",
+              4
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "join_room",
+      "docs": [
+        "Second player joins (optional — solo uses ghost off-chain)."
+      ],
+      "discriminator": [
+        95,
+        232,
+        188,
+        81,
+        124,
+        130,
+        78,
+        139
+      ],
+      "accounts": [
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.code",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "challenger",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer"
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "settle",
+      "docs": [
+        "Finalize winner (call on ER then commit_and_undelegate)."
+      ],
+      "discriminator": [
+        175,
+        42,
+        185,
+        87,
+        144,
+        131,
+        102,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.code",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "settle_and_undelegate",
+      "docs": [
+        "settle + undelegate in one ER path after taps."
+      ],
+      "discriminator": [
+        169,
+        143,
+        70,
+        235,
+        249,
+        1,
+        119,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.code",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "start_round",
+      "docs": [
+        "Start round: set LIVE + go timestamp (client enforces wait; upgrade path = VRF)."
+      ],
+      "discriminator": [
+        144,
+        144,
+        43,
+        7,
+        193,
+        42,
+        217,
+        215
+      ],
+      "accounts": [
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.code",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "go_delay_ms",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "tap",
+      "docs": [
+        "Record a tap. reaction_ms = ms after GO. First valid / better score wins.",
+        "Intended to run on ER after delegate."
+      ],
+      "discriminator": [
+        31,
+        254,
+        225,
+        122,
+        3,
+        186,
+        67,
+        245
+      ],
+      "accounts": [
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.code",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "reaction_ms",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "tap_solo",
+      "docs": [
+        "Solo / demo: host writes both host + ghost scores, then settle locally."
+      ],
+      "discriminator": [
+        249,
+        252,
+        88,
+        224,
+        234,
+        54,
+        91,
+        30
+      ],
+      "accounts": [
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.code",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "host_ms",
+          "type": "u32"
+        },
+        {
+          "name": "ghost_ms",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "undelegate_room",
+      "docs": [
+        "Commit + undelegate room back to base layer."
+      ],
+      "discriminator": [
+        151,
+        179,
+        196,
+        11,
+        39,
+        232,
+        174,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.code",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Room",
+      "discriminator": [
+        156,
+        199,
+        67,
+        27,
+        222,
+        23,
+        185,
+        94
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "BadStatus",
+      "msg": "Invalid room status for this action"
+    },
+    {
+      "code": 6001,
+      "name": "RoomFull",
+      "msg": "Room already has a challenger"
+    },
+    {
+      "code": 6002,
+      "name": "HostCannotJoin",
+      "msg": "Host cannot join as challenger"
+    },
+    {
+      "code": 6003,
+      "name": "NotPlayer",
+      "msg": "Signer is not a player in this room"
+    },
+    {
+      "code": 6004,
+      "name": "AlreadyTapped",
+      "msg": "Player already tapped this round"
+    },
+    {
+      "code": 6005,
+      "name": "BadReaction",
+      "msg": "Invalid reaction time"
+    },
+    {
+      "code": 6006,
+      "name": "NoTaps",
+      "msg": "No taps recorded"
+    }
+  ],
+  "types": [
+    {
+      "name": "Room",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "host",
+            "type": "pubkey"
+          },
+          {
+            "name": "challenger",
+            "type": "pubkey"
+          },
+          {
+            "name": "code",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "host_score",
+            "type": "u32"
+          },
+          {
+            "name": "challenger_score",
+            "type": "u32"
+          },
+          {
+            "name": "host_ms",
+            "type": "u32"
+          },
+          {
+            "name": "challenger_ms",
+            "type": "u32"
+          },
+          {
+            "name": "go_ts",
+            "type": "i64"
+          },
+          {
+            "name": "winner",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
