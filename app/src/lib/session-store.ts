@@ -11,10 +11,12 @@ export type StoredSession = {
   wallet: WalletSession | null;
   lastRoomCode: string | null;
   room: RoomState | null;
+  /** Locked display name from Enter — required before create/join */
+  playerName: string | null;
 };
 
 function empty(): StoredSession {
-  return { wallet: null, lastRoomCode: null, room: null };
+  return { wallet: null, lastRoomCode: null, room: null, playerName: null };
 }
 
 export function loadSession(): StoredSession {

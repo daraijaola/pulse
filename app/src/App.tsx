@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { loadSession, saveSession } from "./lib/session-store";
 import "./App.css";
 
-const SESSION_KEY = "pulse-session";
+const SESSION_KEY = "pulse-flow";
 const MIN_PLAYER_NAME = 2;
 const MAX_PLAYER_NAME = 16;
 
@@ -198,7 +199,8 @@ function Btn({
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
-  const [playerName, setPlayerName] = useState("");
+  const [nameDraft, setNameDraft] = useState("");
+  const [lockedName, setLockedName] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [joinInput, setJoinInput] = useState("");
   const [flowUnlocked, setFlowUnlocked] = useState(0);
@@ -208,6 +210,7 @@ export default function App() {
   const [oppScore, setOppScore] = useState(0);
   const [ms, setMs] = useState<number | null>(null);
   const [won, setWon] = useState(false);
+  const [ghostMs, setGhostMs] = useState<number | null>(null);
   const [isHost, setIsHost] = useState(true);
   const [codeCopied, setCodeCopied] = useState(false);
   const [boot, setBoot] = useState(true);
@@ -219,12 +222,11 @@ export default function App() {
   const [heroMs, setHeroMs] = useState(127);
   const [bootKeys, setBootKeys] = useState(0);
 
-  const displayName = useMemo(() => {
-    const trimmed = playerName.trim();
-    return trimmed.length >= MIN_PLAYER_NAME ? trimmed : "Player";
-  }, [playerName]);
-
-  const hasValidPlayer = playerName.trim().length >= MIN_PLAYER_NAME;
+  const nameLocked = lockedName.trim().length >= MIN_PLAYER_NAME;
+  const displayName = nameLocked ? lockedName.trim() : "Player";
+  const hasValidPlayer = nameLocked;
+  const canLockName =
+    !nameLocked && nameDraft.trim().length >= MIN_PLAYER_NAME;
 
   const isRoundLive =
     screen === "arena" &&
@@ -235,28 +237,39 @@ export default function App() {
       const raw = sessionStorage.getItem(SESSION_KEY);
       if (!raw) return;
       const saved = JSON.parse(raw) as {
-        playerName?: string;
+        lockedName?: string;
         roomCode?: string;
         flowUnlocked?: number;
         isHost?: boolean;
       };
-      if (saved.playerName) setPlayerName(saved.playerName);
+      if (saved.lockedName) {
+        setLockedName(saved.lockedName);
+        setNameDraft(saved.lockedName);
+      }
       if (saved.roomCode) setRoomCode(saved.roomCode);
       if (typeof saved.flowUnlocked === "number") {
         setFlowUnlocked(saved.flowUnlocked);
       }
       if (typeof saved.isHost === "boolean") setIsHost(saved.isHost);
     } catch {
-      /* ignore corrupt session */
+      /* ignore corrupt flow snapshot */
+    }
+    const stored = loadSession();
+    if (stored.playerName && !lockedName) {
+      setLockedName(stored.playerName);
+      setNameDraft(stored.playerName);
     }
   }, []);
 
   useEffect(() => {
     sessionStorage.setItem(
       SESSION_KEY,
-      JSON.stringify({ playerName, roomCode, flowUnlocked, isHost }),
+      JSON.stringify({ lockedName, roomCode, flowUnlocked, isHost }),
     );
-  }, [playerName, roomCode, flowUnlocked, isHost]);
+    if (nameLocked) {
+      saveSession({ playerName: lockedName.trim() });
+    }
+  }, [lockedName, roomCode, flowUnlocked, isHost, nameLocked]);
 
   useEffect(() => {
     return () => {
@@ -446,6 +459,18 @@ export default function App() {
     }
   }, [phase]);
 
+  function lockPlayerName() {
+    const trimmed = nameDraft.trim();
+    if (trimmed.length < MIN_PLAYER_NAME) return;
+    setLockedName(trimmed);
+    setNameDraft(trimmed);
+    saveSession({ playerName: trimmed });
+  }
+
+  function unlockPlayerName() {
+    setLockedName("");
+  }
+
   function enterLobby(asHost: boolean, code?: string) {
     if (!hasValidPlayer) return;
     setIsHost(asHost);
@@ -459,6 +484,7 @@ export default function App() {
     setYouScore(0);
     setOppScore(0);
     setMs(null);
+    setGhostMs(null);
   }
 
   function createRoom() {
@@ -491,6 +517,7 @@ export default function App() {
     setYouScore(0);
     setOppScore(0);
     setMs(null);
+    setGhostMs(null);
 
     scheduleRound(() => setPhase("vrf"), 900);
     scheduleRound(() => setPhase("waiting"), 1800);
@@ -509,6 +536,7 @@ export default function App() {
     setPhase("tapped");
     setYouScore(reaction > 0 ? Math.max(10, 1000 - reaction) : 500);
     const ghost = 120 + Math.floor(Math.random() * 280);
+    setGhostMs(ghost);
     setOppScore(Math.max(10, 1000 - ghost));
     scheduleRound(() => setPhase("settling"), 700);
     scheduleRound(() => {
@@ -765,13 +793,12 @@ export default function App() {
             <header className="flow-intro">
               <p className="flow-kicker">Get in</p>
               <h1 className="flow-title">
-                Name your
+                Set your
                 <br />
-                fighter.
+                player name.
               </h1>
               <p className="flow-lede">
-                Player name locks in for this session — then create or join a
-                room.
+                Lock your name, then create or join a room.
               </p>
             </header>
 
@@ -779,7 +806,7 @@ export default function App() {
               <div className="player-id__head">
                 <span className="player-id__chip" aria-hidden>
                   <Keycap tone="blue" size="sm">
-                    {hasValidPlayer
+                    {nameLocked
                       ? displayName.charAt(0).toUpperCase()
                       : "?"}
                   </Keycap>
@@ -789,33 +816,64 @@ export default function App() {
                     Player name
                   </label>
                   <p className="player-id__hint">
-                    Session call sign · shown in lobby, arena &amp; result
+                    Shown in lobby, arena and results
                   </p>
                 </div>
               </div>
-              <input
-                id="player-name"
-                className="name-input"
-                placeholder="Your call sign"
-                value={playerName}
-                maxLength={MAX_PLAYER_NAME}
-                autoComplete="nickname"
-                autoCapitalize="words"
-                spellCheck={false}
-                onChange={(e) =>
-                  setPlayerName(sanitizePlayerName(e.target.value))
-                }
-                aria-label="Player name"
-              />
-              {hasValidPlayer && (
-                <p className="player-id__ready">
+
+              <div
+                className={`name-lock ${nameLocked ? "is-locked" : ""}`}
+              >
+                <input
+                  id="player-name"
+                  className="name-lock__input"
+                  placeholder="Enter your name"
+                  value={nameDraft}
+                  maxLength={MAX_PLAYER_NAME}
+                  autoComplete="nickname"
+                  autoCapitalize="words"
+                  spellCheck={false}
+                  readOnly={nameLocked}
+                  onChange={(e) =>
+                    setNameDraft(sanitizePlayerName(e.target.value))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") lockPlayerName();
+                  }}
+                  aria-label="Player name"
+                />
+                {nameLocked ? (
+                  <button
+                    type="button"
+                    className="name-lock__btn name-lock__btn--edit"
+                    onClick={unlockPlayerName}
+                  >
+                    Edit
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="name-lock__btn name-lock__btn--enter"
+                    onClick={lockPlayerName}
+                    disabled={!canLockName}
+                    aria-label="Lock in player name"
+                  >
+                    <ArrowIcon />
+                  </button>
+                )}
+              </div>
+
+              {nameLocked && (
+                <p className="player-id__locked">
                   <span className="player-id__pulse" aria-hidden />
-                  Session armed as <strong>{displayName}</strong>
+                  Player name locked · <strong>{displayName}</strong>
                 </p>
               )}
             </section>
 
-            <section className="flow-panel">
+            <section
+              className={`flow-panel ${!nameLocked ? "flow-panel--gated" : ""}`}
+            >
               <Btn onClick={createRoom} disabled={!hasValidPlayer}>
                 Create room
               </Btn>
@@ -1071,70 +1129,135 @@ export default function App() {
       )}
 
       {screen === "result" && (
-        <main className="stage stage-result">
-          <div className={`result-banner ${won ? "win" : "lose"}`}>
-            <div className="result-banner__keys" aria-hidden>
-              {won ? (
-                <>
-                  <Keycap tone="green" size="md">
-                    W
-                  </Keycap>
-                  <Keycap tone="dark" size="md">
-                    I
-                  </Keycap>
-                  <Keycap tone="blue" size="md">
-                    N
-                  </Keycap>
-                </>
-              ) : (
-                <>
-                  <Keycap tone="orange" size="md">
-                    G
-                  </Keycap>
-                  <Keycap tone="dark" size="md">
-                    H
-                  </Keycap>
-                  <Keycap tone="pink" size="md">
-                    O
-                  </Keycap>
-                  <Keycap tone="blue" size="md">
-                    S
-                  </Keycap>
-                  <Keycap tone="yellow" size="md">
-                    T
-                  </Keycap>
-                </>
-              )}
-            </div>
-            <h2>
-              {won
-                ? `${displayName} won the pulse`
-                : `Ghost edged ${displayName}`}
-            </h2>
-            <p>
-              {ms != null ? `Reaction ${ms}ms · ` : ""}
-              {displayName} · commit to Solana base (FE preview)
+        <main className={`flow flow-result ${won ? "is-win" : "is-lose"}`}>
+          <div className="flow-stack">
+            <header className="result-intro">
+              <p className="flow-kicker">{won ? "Victory" : "Defeat"}</p>
+              <h1 className="result-headline">
+                {won ? (
+                  <>
+                    {displayName}
+                    <br />
+                    <span className="result-headline__accent">took it.</span>
+                  </>
+                ) : (
+                  <>
+                    Ghost
+                    <br />
+                    <span className="result-headline__accent">was faster.</span>
+                  </>
+                )}
+              </h1>
+            </header>
+
+            <section className="result-chamber" aria-label="Round result">
+              <div className="result-chamber__status">
+                {won ? "Winner locked" : "Round complete"} ·{" "}
+                {ms != null ? `${ms}ms reaction` : "—"} · settling on Solana
+              </div>
+
+              <div className="result-chamber__frame">
+                <span className="result-chamber__corner result-chamber__corner--tl" />
+                <span className="result-chamber__corner result-chamber__corner--tr" />
+                <span className="result-chamber__corner result-chamber__corner--bl" />
+                <span className="result-chamber__corner result-chamber__corner--br" />
+
+                <div className="result-chamber__keys" aria-hidden>
+                  {won ? (
+                    <>
+                      <Keycap tone="green" size="md">
+                        W
+                      </Keycap>
+                      <Keycap tone="dark" size="md">
+                        I
+                      </Keycap>
+                      <Keycap tone="blue" size="md">
+                        N
+                      </Keycap>
+                    </>
+                  ) : (
+                    <>
+                      <Keycap tone="orange" size="md">
+                        L
+                      </Keycap>
+                      <Keycap tone="dark" size="md">
+                        O
+                      </Keycap>
+                      <Keycap tone="pink" size="md">
+                        S
+                      </Keycap>
+                      <Keycap tone="blue" size="md">
+                        T
+                      </Keycap>
+                    </>
+                  )}
+                </div>
+
+                <div className="result-chamber__hero">
+                  <span className="result-chamber__ms">
+                    {ms != null ? `${ms}ms` : "—"}
+                  </span>
+                  <span className="result-chamber__label">Your reaction</span>
+                </div>
+              </div>
+
+              <ol className="result-settle" aria-label="Settlement steps">
+                <li className="is-done">
+                  <span className="result-settle__idx">01</span>
+                  <span className="result-settle__label">ER round</span>
+                </li>
+                <li className="is-done">
+                  <span className="result-settle__idx">02</span>
+                  <span className="result-settle__label">VRF pulse</span>
+                </li>
+                <li className="is-active">
+                  <span className="result-settle__idx">03</span>
+                  <span className="result-settle__label">Solana</span>
+                </li>
+              </ol>
+            </section>
+
+            <section className="result-matchup" aria-label="Final scores">
+              <article className="result-fighter result-fighter--you">
+                <span className="result-fighter__role">{displayName}</span>
+                <span className="result-fighter__score">{youScore}</span>
+                <span className="result-fighter__meta">
+                  {ms != null ? `${ms}ms` : "—"}
+                  {won ? " · Winner" : ""}
+                </span>
+              </article>
+              <div className="result-matchup__mid" aria-hidden>
+                <span className="result-matchup__badge">VS</span>
+              </div>
+              <article className="result-fighter result-fighter--ghost">
+                <span className="result-fighter__role">Ghost</span>
+                <span className="result-fighter__score">{oppScore}</span>
+                <span className="result-fighter__meta">
+                  {ghostMs != null ? `${ghostMs}ms` : "Opponent"}
+                  {!won ? " · Winner" : ""}
+                </span>
+              </article>
+            </section>
+
+            <p className="result-solana-hint">
+              <img
+                src={`${import.meta.env.BASE_URL}solana-mark.svg`}
+                alt=""
+                className="result-solana-hint__mark"
+              />
+              Result commits to <strong>Solana base layer</strong> (FE preview)
             </p>
-          </div>
 
-          <div className="scoreboard">
-            <div className="score-card you">
-              <div className="label">{displayName}</div>
-              <div className="value">{youScore}</div>
-              <div className="sub">{ms != null ? `${ms}ms` : "—"}</div>
+            <div className="flow-actions">
+              <Btn onClick={startRound}>Play again</Btn>
+              <Btn
+                variant="ghost"
+                onClick={() => navigateFlow("lobby")}
+                disabled={!canNavigateTo("lobby")}
+              >
+                Back to lobby
+              </Btn>
             </div>
-            <div className="score-card opp">
-              <div className="label">Opp</div>
-              <div className="value">{oppScore}</div>
-              <div className="sub">Ghost</div>
-            </div>
-          </div>
-
-          <div className="stack">
-            <Btn onClick={startRound}>Play again</Btn>
-            <Btn variant="ghost" onClick={backHome}>
-              Home
-            </Btn>
           </div>
         </main>
       )}
