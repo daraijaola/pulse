@@ -23,3 +23,12 @@ export {
   settleRound,
   isMockMode,
 } from "./pulse-api";
+export {
+  getProgramId,
+  findRoomPda,
+  codeToBytes,
+  ROOM_SEED,
+  RoomStatus,
+  Winner,
+} from "./program";
+export { isProgramConfigured, getPreferredConnection } from "./pulse-chain";
