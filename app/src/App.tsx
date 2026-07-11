@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { loadSession, saveSession } from "./lib/session-store";
 import {
   createRoom as apiCreateRoom,
+  joinRoom as apiJoinRoom,
+  refreshRoom,
   runRound,
   resolveTap,
   settleRound,
@@ -9,7 +11,7 @@ import {
 import { useWallet } from "./hooks/useWallet";
 import { WalletButton } from "./components/connect/WalletButton";
 import { NetworkStatus } from "./components/connect/NetworkStatus";
-import type { RoundState } from "./lib/types";
+import type { RoundState, RoomState } from "./lib/types";
 import "./App.css";
 
 const SESSION_KEY = "pulse-flow";
@@ -88,6 +90,11 @@ function makeRoomCode() {
     out += alphabet[Math.floor(Math.random() * alphabet.length)];
   }
   return out;
+}
+
+function shortPkMaybe(pk: string | null | undefined) {
+  if (!pk) return "—";
+  return `${pk.slice(0, 4)}…${pk.slice(-4)}`;
 }
 
 function ArrowIcon() {
@@ -234,6 +241,7 @@ export default function App() {
   const [chainBusy, setChainBusy] = useState(false);
   const [lastSigs, setLastSigs] = useState<RoundState["sigs"]>(undefined);
   const [chainError, setChainError] = useState<string | null>(null);
+  const [liveRoom, setLiveRoom] = useState<RoomState | null>(null);
   const roundRef = useRef<RoundState | null>(null);
   const wallet = useWallet();
 
@@ -246,6 +254,28 @@ export default function App() {
   const isRoundLive =
     screen === "arena" &&
     phase !== "idle";
+
+  const oppReady = !!(liveRoom && !liveRoom.opponent.isGhost);
+  const oppLabel = liveRoom?.opponent.displayName ?? "Ghost";
+  const oppTag = oppReady
+    ? shortPkMaybe(liveRoom?.opponent.publicKey)
+    : "Waiting for friend…";
+
+  // Lobby: poll on-chain room so host sees when friend joins
+  useEffect(() => {
+    if (screen !== "lobby" || !roomCode) return;
+    let dead = false;
+    const tick = async () => {
+      const r = await refreshRoom(roomCode, wallet.publicKey);
+      if (!dead && r) setLiveRoom(r);
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 2500);
+    return () => {
+      dead = true;
+      window.clearInterval(id);
+    };
+  }, [screen, roomCode, wallet.publicKey]);
 
   useEffect(() => {
     try {
@@ -503,6 +533,7 @@ export default function App() {
     setChainBusy(true);
     try {
       const room = await apiCreateRoom(wallet.publicKey);
+      setLiveRoom(room);
       setIsHost(true);
       setRoomCode(room.code);
       setJoinInput("");
@@ -524,10 +555,34 @@ export default function App() {
     }
   }
 
-  function joinRoom() {
+  async function joinRoom() {
     const code = joinInput.trim().toUpperCase();
-    if (code.length < 3 || !hasValidPlayer) return;
-    enterLobby(false, code);
+    if (code.length < 3 || !hasValidPlayer || chainBusy) return;
+    setChainError(null);
+    setChainBusy(true);
+    try {
+      if (!wallet.publicKey) {
+        throw new Error("Connect wallet first to join a real room");
+      }
+      const room = await apiJoinRoom(code, wallet.publicKey);
+      setLiveRoom(room);
+      setIsHost(false);
+      setRoomCode(room.code);
+      setJoinInput("");
+      setCodeCopied(false);
+      setRoundComplete(false);
+      setFlowUnlocked((u) => Math.max(u, 1));
+      setScreen("lobby");
+      setPhase("idle");
+      setYouScore(0);
+      setOppScore(0);
+      setMs(null);
+      setGhostMs(null);
+    } catch (e) {
+      setChainError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setChainBusy(false);
+    }
   }
 
   async function copyRoomCode() {
@@ -1079,28 +1134,36 @@ export default function App() {
                 <span className="lobby-versus__line" />
               </div>
 
-              <article className="lobby-fighter lobby-fighter--ghost">
+              <article
+                className={`lobby-fighter ${oppReady ? "lobby-fighter--you" : "lobby-fighter--ghost"}`}
+              >
                 <div className="lobby-fighter__top">
                   <span className="lobby-fighter__ghost-keys" aria-hidden>
                     <Keycap tone="dark" size="sm">
                       G
                     </Keycap>
                   </span>
-                  <span className="lobby-fighter__state">Ghost</span>
+                  <span className="lobby-fighter__state">
+                    {oppReady ? "Ready" : "Ghost"}
+                  </span>
                 </div>
-                <span className="lobby-fighter__name">Opponent</span>
-                <span className="lobby-fighter__tag">Solo demo</span>
+                <span className="lobby-fighter__name">{oppLabel}</span>
+                <span className="lobby-fighter__tag">{oppTag}</span>
               </article>
             </section>
+
+            {chainError && <p className="chain-error">{chainError}</p>}
 
             <ol className="lobby-pipeline" aria-label="Pre-round steps">
               <li className="is-done">
                 <span className="lobby-pipeline__idx">01</span>
                 <span className="lobby-pipeline__label">Share</span>
               </li>
-              <li className="is-active">
+              <li className={oppReady ? "is-done" : "is-active"}>
                 <span className="lobby-pipeline__idx">02</span>
-                <span className="lobby-pipeline__label">Ready</span>
+                <span className="lobby-pipeline__label">
+                  {oppReady ? "Matched" : "Waiting"}
+                </span>
               </li>
               <li>
                 <span className="lobby-pipeline__idx">03</span>
@@ -1113,12 +1176,15 @@ export default function App() {
             </ol>
 
             <p className="lobby-er-hint">
-              Next: room delegates to <strong>Ephemeral Rollup</strong> on
-              start.
+              {oppReady
+                ? "Friend joined. Start when both ready."
+                : "Waiting for friend to join with this code (wallet + Join). Or Start solo vs Ghost."}
             </p>
 
             <div className="flow-actions">
-              <Btn onClick={startRound}>Start round</Btn>
+              <Btn onClick={startRound} disabled={chainBusy}>
+                {chainBusy ? "Working…" : "Start round"}
+              </Btn>
             </div>
           </div>
         </main>

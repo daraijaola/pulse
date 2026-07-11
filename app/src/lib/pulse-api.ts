@@ -7,9 +7,11 @@ import { makeRoomCode, saveSession } from "./session-store";
 import type { RoomState, RoundPhase, RoundState } from "./types";
 import {
   onchainCreateRoom,
+  onchainJoinRoom,
   onchainStartRound,
   onchainTapSolo,
   onchainSettle,
+  fetchRoom,
 } from "./pulse-onchain";
 import { getConnectedPublicKey } from "./wallet";
 
@@ -70,16 +72,45 @@ export async function joinRoom(
 ): Promise<RoomState> {
   const clean = code.trim().toUpperCase();
   if (clean.length < 3) throw new Error("Invalid room code");
+  const pk = playerPk || getConnectedPublicKey();
+
+  if (pk && config.programId) {
+    try {
+      const { room, signature } = await onchainJoinRoom(clean, pk);
+      console.info("[pulse] join_room", signature, room.code);
+      return room;
+    } catch (e) {
+      console.warn("[pulse] join_room on-chain failed", e);
+      throw e instanceof Error
+        ? e
+        : new Error("Could not join room on-chain");
+    }
+  }
+
+  // Offline / no wallet: local-only join (not shared with host)
   const room: RoomState = {
     code: clean,
     host: null,
     status: "ready",
-    you: youSeat(playerPk || getConnectedPublicKey()),
+    you: youSeat(pk),
     opponent: ghostSeat("Host"),
     createdAt: Date.now(),
   };
   saveSession({ lastRoomCode: clean, room });
   return room;
+}
+
+/** Poll room from chain (lobby refresh) */
+export async function refreshRoom(
+  code: string,
+  viewerPk: string | null,
+): Promise<RoomState | null> {
+  if (!code || !config.programId) return null;
+  try {
+    return await fetchRoom(code, viewerPk || getConnectedPublicKey());
+  } catch {
+    return null;
+  }
 }
 
 export type RoundCallbacks = {

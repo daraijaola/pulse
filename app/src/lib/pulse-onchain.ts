@@ -10,15 +10,17 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { getBaseConnection } from "./solana";
-import { codeToBytes, findRoomPda, getProgramId } from "./program";
+import { codeToBytes, findRoomPda, getProgramId, RoomStatus } from "./program";
 import { getInjectedProvider } from "./wallet";
 import { makeRoomCode, saveSession } from "./session-store";
 import type { RoomState } from "./types";
 
 const PROGRAM_ID = getProgramId();
+const ZERO = PublicKey.default;
 
 const D = {
   create_room: [130, 166, 32, 2, 247, 120, 178, 53],
+  join_room: [95, 232, 188, 81, 124, 130, 78, 139],
   start_round: [144, 144, 43, 7, 193, 42, 217, 215],
   tap_solo: [249, 252, 88, 224, 234, 54, 91, 30],
   settle: [175, 42, 185, 87, 144, 131, 102, 212],
@@ -46,7 +48,6 @@ async function signAndSend(
   tx.feePayer = payer;
   const latest = await connection.getLatestBlockhash("confirmed");
   tx.recentBlockhash = latest.blockhash;
-  // Phantom accepts web3.js Transaction
   const signed = (await provider.signTransaction(tx as never)) as {
     serialize: () => Uint8Array;
   };
@@ -63,6 +64,84 @@ async function signAndSend(
     "confirmed",
   );
   return sig;
+}
+
+function statusLabel(s: number): RoomState["status"] {
+  if (s === RoomStatus.LIVE) return "live";
+  if (s === RoomStatus.SETTLED) return "closed";
+  if (s === RoomStatus.READY) return "ready";
+  return "open";
+}
+
+/** Decode Room account (Anchor 8-byte disc + fields) */
+export function decodeRoomAccount(
+  data: Buffer,
+  viewerPk: string | null,
+): RoomState | null {
+  if (data.length < 8 + 95) return null;
+  let o = 8;
+  const host = new PublicKey(data.subarray(o, o + 32));
+  o += 32;
+  const challenger = new PublicKey(data.subarray(o, o + 32));
+  o += 32;
+  const code = data.subarray(o, o + 4).toString("utf8").replace(/\0/g, "");
+  o += 4;
+  const status = data[o];
+  o += 1;
+  const hostScore = data.readUInt32LE(o);
+  o += 4;
+  const challScore = data.readUInt32LE(o);
+  o += 4;
+  const hostMs = data.readUInt32LE(o);
+  o += 4;
+  const challMs = data.readUInt32LE(o);
+  o += 4;
+  // go_ts i64 skip
+  o += 8;
+  // winner, bump
+  o += 2;
+
+  const hostStr = host.toBase58();
+  const challStr = challenger.equals(ZERO) ? null : challenger.toBase58();
+  const youAreHost = viewerPk === hostStr;
+  const youAreChall = viewerPk != null && viewerPk === challStr;
+
+  const hostSeat = {
+    publicKey: hostStr,
+    displayName: youAreHost ? "You" : "Host",
+    isGhost: false,
+    ready: true,
+    score: hostScore,
+    reactionMs: hostMs || null,
+  };
+  const challSeat = {
+    publicKey: challStr,
+    displayName: youAreChall ? "You" : challStr ? "Opponent" : "Waiting…",
+    isGhost: !challStr,
+    ready: !!challStr,
+    score: challScore,
+    reactionMs: challMs || null,
+  };
+
+  return {
+    code,
+    host: hostStr,
+    status: statusLabel(status),
+    you: youAreChall ? challSeat : hostSeat,
+    opponent: youAreChall ? hostSeat : challSeat,
+    createdAt: Date.now(),
+  };
+}
+
+export async function fetchRoom(
+  code: string,
+  viewerPk: string | null,
+): Promise<RoomState | null> {
+  const connection = getBaseConnection();
+  const [pda] = findRoomPda(code, PROGRAM_ID);
+  const info = await connection.getAccountInfo(pda, "confirmed");
+  if (!info?.data) return null;
+  return decodeRoomAccount(Buffer.from(info.data), viewerPk);
 }
 
 export async function onchainCreateRoom(hostPk: string): Promise<{
@@ -87,31 +166,47 @@ export async function onchainCreateRoom(hostPk: string): Promise<{
   });
 
   const signature = await signAndSend(connection, new Transaction().add(ix), host);
-
-  const room: RoomState = {
-    code,
-    host: hostPk,
-    status: "ready",
-    you: {
-      publicKey: hostPk,
-      displayName: "You",
-      isGhost: false,
-      ready: true,
-      score: 0,
-      reactionMs: null,
-    },
-    opponent: {
-      publicKey: null,
-      displayName: "Ghost",
-      isGhost: true,
-      ready: true,
-      score: 0,
-      reactionMs: null,
-    },
-    createdAt: Date.now(),
-  };
+  const room = await fetchRoom(code, hostPk);
+  if (!room) {
+    throw new Error("Room created but could not fetch account");
+  }
   saveSession({ lastRoomCode: code, room });
   return { room, signature, roomPda: roomPda.toBase58() };
+}
+
+export async function onchainJoinRoom(
+  code: string,
+  challengerPk: string,
+): Promise<{ room: RoomState; signature: string }> {
+  const connection = getBaseConnection();
+  const clean = code.trim().toUpperCase();
+  const challenger = new PublicKey(challengerPk);
+  const [roomPda] = findRoomPda(clean, PROGRAM_ID);
+
+  // must exist
+  const existing = await connection.getAccountInfo(roomPda, "confirmed");
+  if (!existing) {
+    throw new Error("Room not found on-chain. Host must create first (with wallet).");
+  }
+
+  const ix = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: roomPda, isSigner: false, isWritable: true },
+      { pubkey: challenger, isSigner: true, isWritable: false },
+    ],
+    data: disc("join_room"),
+  });
+
+  const signature = await signAndSend(
+    connection,
+    new Transaction().add(ix),
+    challenger,
+  );
+  const room = await fetchRoom(clean, challengerPk);
+  if (!room) throw new Error("Joined but could not fetch room");
+  saveSession({ lastRoomCode: clean, room });
+  return { room, signature };
 }
 
 export async function onchainStartRound(
