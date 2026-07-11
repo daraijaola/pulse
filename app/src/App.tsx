@@ -5,6 +5,34 @@ type Screen = "home" | "enter" | "lobby" | "arena" | "result";
 
 const FLOW_SCREENS: Screen[] = ["enter", "lobby", "arena", "result"];
 
+const ARENA_PHASES: DemoPhase[] = [
+  "delegating",
+  "vrf",
+  "waiting",
+  "go",
+  "tapped",
+  "settling",
+];
+
+const ARENA_STEP_LABELS: Record<DemoPhase, string> = {
+  idle: "Idle",
+  delegating: "Delegate",
+  vrf: "VRF",
+  waiting: "Wait",
+  go: "Go",
+  tapped: "Hit",
+  settling: "Settle",
+};
+
+function arenaStepClass(step: DemoPhase, current: DemoPhase) {
+  const si = ARENA_PHASES.indexOf(step);
+  const ci = ARENA_PHASES.indexOf(current);
+  if (si < 0 || ci < 0) return "";
+  if (si === ci) return "is-active";
+  if (si < ci) return "is-done";
+  return "";
+}
+
 function flowTabClass(target: Screen, current: Screen, live = false) {
   const ti = FLOW_SCREENS.indexOf(target);
   const ci = FLOW_SCREENS.indexOf(current);
@@ -266,6 +294,50 @@ export default function App() {
       settling: "SETTLE",
     };
     return map[phase];
+  }, [phase]);
+
+  const arenaBeat = useMemo(() => {
+    switch (phase) {
+      case "delegating":
+        return "delegate";
+      case "vrf":
+        return "signal";
+      case "waiting":
+        return "wait";
+      case "go":
+        return "go";
+      case "tapped":
+      case "settling":
+        return "hit";
+      default:
+        return "wait";
+    }
+  }, [phase]);
+
+  const arenaWaveBeat = useMemo((): "wait" | "signal" | "go" | "hit" => {
+    if (phase === "vrf") return "signal";
+    if (phase === "go") return "go";
+    if (phase === "tapped" || phase === "settling") return "hit";
+    return "wait";
+  }, [phase]);
+
+  const arenaWord = useMemo(() => {
+    switch (phase) {
+      case "delegating":
+        return "SYNC";
+      case "vrf":
+        return "VRF";
+      case "waiting":
+        return "WAIT";
+      case "go":
+        return "TAP";
+      case "tapped":
+        return "HIT";
+      case "settling":
+        return "LOCK";
+      default:
+        return "WAIT";
+    }
   }, [phase]);
 
   function createRoom() {
@@ -720,78 +792,97 @@ export default function App() {
       )}
 
       {screen === "arena" && (
-        <main className="stage stage-arena">
-          <div className="arena-top">
-            <div className="phase-rail" aria-hidden>
-              {(["delegating", "vrf", "waiting", "go"] as DemoPhase[]).map(
-                (p) => (
-                  <span
-                    key={p}
-                    className={`phase-dot ${
-                      phase === p ||
-                      (phase === "tapped" && p === "go") ||
-                      (phase === "settling" && p === "go")
-                        ? "is-on"
-                        : ""
-                    } ${
-                      [
-                        "delegating",
-                        "vrf",
-                        "waiting",
-                        "go",
-                        "tapped",
-                        "settling",
-                      ].indexOf(phase) >
-                      ["delegating", "vrf", "waiting", "go"].indexOf(p)
-                        ? "is-done"
-                        : ""
-                    }`}
-                  />
-                ),
-              )}
-            </div>
-            <div className="status-line">{statusText}</div>
-            <div className="phase-badge">{phaseLabel}</div>
-          </div>
+        <main className={`flow flow-arena arena-beat-${arenaBeat}`}>
+          <div className="flow-stack">
+            <header className="arena-intro">
+              <p className="flow-kicker">Live on ER</p>
+              <div className="arena-intro__row">
+                <h1 className="arena-headline">The pulse.</h1>
+                <span className="arena-phase-badge">{phaseLabel}</span>
+              </div>
+            </header>
 
-          <div className="arena">
-            <div
-              className={`pulse-ring ${
-                phase === "go"
-                  ? "ready"
-                  : phase === "waiting" || phase === "vrf"
-                    ? "waiting"
-                    : phase === "delegating"
-                      ? "booting"
-                      : phase === "tapped" || phase === "settling"
-                        ? "hit"
-                        : ""
-              }`}
+            <section className="arena-chamber" aria-label="Reaction arena">
+              <div className="arena-chamber__flash" aria-hidden />
+              <div className="arena-chamber__status">{statusText}</div>
+
+              <div className="arena-chamber__frame">
+                <span className="arena-chamber__corner arena-chamber__corner--tl" />
+                <span className="arena-chamber__corner arena-chamber__corner--tr" />
+                <span className="arena-chamber__corner arena-chamber__corner--bl" />
+                <span className="arena-chamber__corner arena-chamber__corner--br" />
+
+                <div className="arena-chamber__wave">
+                  <PulseWave beat={arenaWaveBeat} />
+                </div>
+
+                <div className="arena-chamber__orbit" aria-hidden>
+                  <i className="arena-chamber__ring arena-chamber__ring--a" />
+                  <i className="arena-chamber__ring arena-chamber__ring--b" />
+                  <i className="arena-chamber__sweep" />
+                </div>
+
+                <button
+                  type="button"
+                  className="arena-tap"
+                  disabled={phase !== "go"}
+                  onClick={onTap}
+                  aria-label={
+                    phase === "go" ? "Tap now" : `Tap disabled — ${phaseLabel}`
+                  }
+                >
+                  <span className="arena-tap__core">
+                    <span className="arena-tap__word">{arenaWord}</span>
+                    {phase === "tapped" && ms != null && (
+                      <span className="arena-tap__ms">{ms}ms</span>
+                    )}
+                    {phase === "go" && (
+                      <span className="arena-tap__hint">now</span>
+                    )}
+                    {phase !== "go" && phase !== "tapped" && (
+                      <span className="arena-tap__hint">
+                        {phaseLabel.toLowerCase()}
+                      </span>
+                    )}
+                  </span>
+                  <span className="arena-tap__side" aria-hidden />
+                </button>
+              </div>
+
+              <ol className="arena-pipeline" aria-label="Round phases">
+                {ARENA_PHASES.map((step, i) => (
+                  <li
+                    key={step}
+                    className={arenaStepClass(step, phase)}
+                  >
+                    <span className="arena-pipeline__idx">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="arena-pipeline__label">
+                      {ARENA_STEP_LABELS[step]}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+
+            <section
+              className="arena-scoreboard scoreboard"
+              aria-label="Live scores"
             >
-              <div className="pulse-ring__grid" aria-hidden />
-              <button
-                type="button"
-                className="tap-btn"
-                disabled={phase !== "go"}
-                onClick={onTap}
-              >
-                <span className="tap-btn__label">TAP</span>
-                <span className="tap-btn__hint">
-                  {phase === "go" ? "now" : phaseLabel.toLowerCase()}
-                </span>
-              </button>
-            </div>
-
-            <div className="scoreboard">
               <div className="score-card you">
                 <div className="label">You</div>
                 <div className="value">{youScore || "—"}</div>
+                {ms != null && (
+                  <div className="sub">{ms}ms</div>
+                )}
               </div>
               <div className="score-card opp">
-                <div className="label">Opp</div>
+                <div className="label">Ghost</div>
                 <div className="value">{oppScore || "—"}</div>
+                <div className="sub">Opponent</div>
               </div>
-            </div>
+            </section>
           </div>
         </main>
       )}
@@ -895,9 +986,7 @@ export default function App() {
               </button>
             )}
             {screen === "lobby" && (
-              <button type="button" onClick={startRound}>
-                Start <ArrowIcon />
-              </button>
+              <span className="dock-status">Ready</span>
             )}
             {screen === "arena" && (
               <button
