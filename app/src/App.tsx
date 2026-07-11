@@ -111,6 +111,8 @@ export default function App() {
   const [oppScore, setOppScore] = useState(0);
   const [ms, setMs] = useState<number | null>(null);
   const [won, setWon] = useState(false);
+  const [isHost, setIsHost] = useState(true);
+  const [codeCopied, setCodeCopied] = useState(false);
   const [boot, setBoot] = useState(true);
   /** Landing hero demo: cycles the real game feeling */
   const [heroBeat, setHeroBeat] = useState<
@@ -218,7 +220,10 @@ export default function App() {
   }, [phase]);
 
   function createRoom() {
+    setIsHost(true);
     setRoomCode(makeRoomCode());
+    setJoinInput("");
+    setCodeCopied(false);
     setScreen("lobby");
     setPhase("idle");
     setYouScore(0);
@@ -229,9 +234,21 @@ export default function App() {
   function joinRoom() {
     const code = joinInput.trim().toUpperCase();
     if (code.length < 3) return;
+    setIsHost(false);
     setRoomCode(code);
+    setCodeCopied(false);
     setScreen("lobby");
     setPhase("idle");
+  }
+
+  async function copyRoomCode() {
+    try {
+      await navigator.clipboard.writeText(roomCode);
+      setCodeCopied(true);
+      window.setTimeout(() => setCodeCopied(false), 2000);
+    } catch {
+      setCodeCopied(false);
+    }
   }
 
   function startRound() {
@@ -270,7 +287,16 @@ export default function App() {
     setScreen("home");
     setPhase("idle");
     setJoinInput("");
+    setCodeCopied(false);
   }
+
+  const shellStep = useMemo(() => {
+    if (screen === "enter") return "Enter";
+    if (screen === "lobby") return "Lobby";
+    if (screen === "arena") return "Arena";
+    if (screen === "result") return "Result";
+    return "";
+  }, [screen]);
 
   const heroTelemetry = useMemo(() => {
     switch (heroBeat) {
@@ -318,22 +344,19 @@ export default function App() {
       <div className="frame-glow" aria-hidden />
 
       {showChrome && (
-        <header className="topbar">
-          <button type="button" className="brand brand-btn" onClick={backHome}>
-            <div className="brand-mark" aria-hidden>
-              <span />
-            </div>
-            <div className="brand-text">
-              <span className="brand-name">Pulse</span>
-              <span className="brand-sub">Blitz · MagicBlock</span>
-            </div>
+        <header className="shell-bar">
+          <button type="button" className="shell-bar__brand" onClick={backHome}>
+            PULSE
           </button>
           <span
-            className={`chip ${
-              phase === "go" || phase === "waiting" ? "live" : ""
+            className={`shell-bar__step ${
+              screen === "arena" &&
+              (phase === "go" || phase === "waiting")
+                ? "is-live"
+                : ""
             }`}
           >
-            {screen === "arena" ? "ER Live" : "Devnet"}
+            {shellStep}
           </span>
         </header>
       )}
@@ -464,98 +487,78 @@ export default function App() {
         </main>
       )}
 
-      {/* ═══════════ ENTER (create / join only) ═══════════ */}
+      {/* ═══════════ ENTER — create / join (FE mock, no wallet) ═══════════ */}
       {screen === "enter" && (
-        <main className="stage stage-enter">
-          <section className="hero hero-tight">
-            <p className="eyebrow">Step in</p>
-            <h1>
-              Create or
-              <br />
-              join.
-            </h1>
-            <p className="hero-copy">One room. One pulse. First clean tap wins.</p>
-          </section>
+        <main className="flow flow-enter">
+          <h1 className="flow-title">Create or join.</h1>
 
-          <section className="card card-action">
+          <section className="flow-panel">
             <Btn onClick={createRoom}>Create room</Btn>
-            <div className="join-box">
-              <label className="join-label" htmlFor="room-code">
-                Join with code
-              </label>
-              <input
-                id="room-code"
-                className="input"
-                placeholder="ABCD"
-                value={joinInput}
-                maxLength={6}
-                onChange={(e) => setJoinInput(e.target.value.toUpperCase())}
-                aria-label="Room code"
-              />
-              <Btn
-                variant="secondary"
-                onClick={joinRoom}
-                disabled={joinInput.trim().length < 3}
-              >
-                Join room
-              </Btn>
-            </div>
+            <p className="flow-or">or</p>
+            <input
+              id="room-code"
+              className="code-input"
+              placeholder="CODE"
+              value={joinInput}
+              maxLength={6}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              inputMode="text"
+              onChange={(e) =>
+                setJoinInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))
+              }
+              aria-label="Room code"
+            />
+            <Btn
+              variant="secondary"
+              onClick={joinRoom}
+              disabled={joinInput.trim().length < 3}
+            >
+              Join room
+            </Btn>
           </section>
-
-          <Btn variant="ghost" onClick={backHome}>
-            Back
-          </Btn>
         </main>
       )}
 
+      {/* ═══════════ LOBBY — share code, matchup, start (FE mock) ═══════════ */}
       {screen === "lobby" && (
-        <main className="stage stage-lobby">
-          <section className="hero hero-tight">
-            <p className="eyebrow">Room ready</p>
-            <h1>
-              Share
-              <br />
-              the code.
-            </h1>
-            <p className="hero-copy">
-              Show this on camera. Solo works — ghost opponent fills the slot.
+        <main className="flow flow-lobby">
+          <section className="lobby-code">
+            <div className="lobby-code__row">
+              <span className="flow-label">Room code</span>
+              <button
+                type="button"
+                className="lobby-code__copy"
+                onClick={copyRoomCode}
+              >
+                {codeCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <p
+              className="lobby-code__value"
+              aria-label={`Room code ${roomCode}`}
+            >
+              {roomCode}
             </p>
           </section>
 
-          <div className="room-panel">
-            <div className="room-panel__label">Room code</div>
-            <div className="room-code-xl" aria-label={`Room code ${roomCode}`}>
-              {roomCode.split("").map((ch, i) => (
-                <Keycap
-                  key={`${ch}-${i}`}
-                  tone={i % 2 ? "blue" : "dark"}
-                  size="xl"
-                >
-                  {ch}
-                </Keycap>
-              ))}
-            </div>
-          </div>
+          <section className="matchup" aria-label="Players in room">
+            <article className="matchup-card matchup-card--you">
+              <span className="matchup-card__role">You</span>
+              <span className="matchup-card__state">Ready</span>
+              <span className="matchup-card__meta">
+                {isHost ? "Host" : "Joined"}
+              </span>
+            </article>
+            <article className="matchup-card matchup-card--ghost">
+              <span className="matchup-card__role">Ghost</span>
+              <span className="matchup-card__state">In</span>
+              <span className="matchup-card__meta">Demo</span>
+            </article>
+          </section>
 
-          <div className="scoreboard">
-            <div className="score-card you">
-              <div className="label">You</div>
-              <div className="value">Ready</div>
-              <div className="sub">Host</div>
-            </div>
-            <div className="score-card opp">
-              <div className="label">Opponent</div>
-              <div className="value">Ghost</div>
-              <div className="sub">Demo bot</div>
-            </div>
-          </div>
-
-          <div className="stack">
-            <Btn onClick={startRound}>Start round</Btn>
-            <Btn variant="ghost" onClick={backHome}>
-              Leave
-            </Btn>
-          </div>
+          <p className="flow-hint">Delegates to ER on start.</p>
         </main>
       )}
 
@@ -704,15 +707,29 @@ export default function App() {
       {showChrome && (
         <footer className="dock">
           <div className="dock-left">
-            {screen === "enter" && "Enter"}
-            {screen === "lobby" && `Room ${roomCode}`}
+            {screen === "enter" && (
+              <button type="button" className="dock-nav" onClick={backHome}>
+                Home
+              </button>
+            )}
+            {screen === "lobby" && (
+              <button type="button" className="dock-nav" onClick={backHome}>
+                Leave
+              </button>
+            )}
             {screen === "arena" && phaseLabel}
             {screen === "result" && (won ? "Victory" : "Retry")}
           </div>
           <div className="dock-right">
             {screen === "enter" && (
-              <button type="button" onClick={createRoom}>
-                Create <ArrowIcon />
+              <button
+                type="button"
+                onClick={
+                  joinInput.trim().length >= 3 ? joinRoom : createRoom
+                }
+              >
+                {joinInput.trim().length >= 3 ? "Join" : "Create"}{" "}
+                <ArrowIcon />
               </button>
             )}
             {screen === "lobby" && (
