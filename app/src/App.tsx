@@ -696,10 +696,6 @@ export default function App() {
           >
             PULSE
           </button>
-          <div className="shell-nav__chain">
-            <NetworkStatus />
-            <WalletButton />
-          </div>
           <nav className="shell-nav__tabs" aria-label="Game flow">
             {(
               [
@@ -864,7 +860,7 @@ export default function App() {
         </main>
       )}
 
-      {/* ═══════════ ENTER — create / join (FE mock, no wallet) ═══════════ */}
+      {/* ═══════════ ENTER — create / join ═══════════ */}
       {screen === "enter" && (
         <main className="flow flow-enter">
           <div className="flow-stack flow-stack--center">
@@ -879,6 +875,17 @@ export default function App() {
                 Lock your name, then create or join a room.
               </p>
             </header>
+
+            <section className="wallet-strip" aria-label="Wallet">
+              <div className="wallet-strip__row">
+                <NetworkStatus />
+                <WalletButton variant="full" />
+              </div>
+              <p className="wallet-strip__hint">
+                Optional now — connect Phantom (devnet) for on-chain rooms.
+                Without wallet, create/join still works solo (Ghost).
+              </p>
+            </section>
 
             <section className="player-id" aria-labelledby="player-name-label">
               <div className="player-id__head">
@@ -1006,14 +1013,21 @@ export default function App() {
                 <span className="lobby-headline__accent">code.</span>
               </h1>
               <p className="lobby-lede">
-                Share with a friend or run solo against Ghost.
+                Share the code so a friend can join — or play solo vs Ghost.
               </p>
             </header>
+
+            <section className="wallet-strip" aria-label="Wallet">
+              <div className="wallet-strip__row">
+                <NetworkStatus />
+                <WalletButton variant="full" />
+              </div>
+            </section>
 
             <section className="lobby-vault" aria-labelledby="lobby-code-label">
               <div className="lobby-vault__status">
                 <span className="lobby-vault__pulse" aria-hidden />
-                {isHost ? "Hosting" : "Joined"} · waiting for pulse
+                {isHost ? "Hosting" : "Joined"} · code {roomCode || "—"}
               </div>
 
               <div className="lobby-vault__frame">
