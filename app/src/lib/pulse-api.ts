@@ -3,7 +3,6 @@
  */
 
 import { config } from "./config";
-import { makeRoomCode, saveSession } from "./session-store";
 import type { RoomState, RoundPhase, RoundState } from "./types";
 import {
   onchainCreateRoom,
@@ -15,54 +14,21 @@ import {
 } from "./pulse-onchain";
 import { getConnectedPublicKey } from "./wallet";
 
-function ghostSeat(name = "Ghost"): RoomState["opponent"] {
-  return {
-    publicKey: null,
-    displayName: name,
-    isGhost: true,
-    ready: true,
-    score: 0,
-    reactionMs: null,
-  };
-}
-
-function youSeat(pk: string | null): RoomState["you"] {
-  return {
-    publicKey: pk,
-    displayName: "You",
-    isGhost: false,
-    ready: true,
-    score: 0,
-    reactionMs: null,
-  };
-}
-
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Create room — on-chain when wallet connected */
+/** Create room — REQUIRES wallet + on-chain (no silent mock for multiplayer) */
 export async function createRoom(hostPk: string | null): Promise<RoomState> {
   const pk = hostPk || getConnectedPublicKey();
-  if (pk && config.programId) {
-    try {
-      const { room, signature } = await onchainCreateRoom(pk);
-      console.info("[pulse] create_room", signature, room.code);
-      return room;
-    } catch (e) {
-      console.warn("[pulse] create_room on-chain failed → mock", e);
-    }
+  if (!pk) {
+    throw new Error("Connect wallet first (use Open in Phantom on mobile).");
   }
-  const code = makeRoomCode(4);
-  const room: RoomState = {
-    code,
-    host: pk,
-    status: "ready",
-    you: youSeat(pk),
-    opponent: ghostSeat(),
-    createdAt: Date.now(),
-  };
-  saveSession({ lastRoomCode: code, room });
+  if (!config.programId) {
+    throw new Error("Program id missing.");
+  }
+  const { room, signature } = await onchainCreateRoom(pk);
+  console.info("[pulse] create_room", signature, room.code);
   return room;
 }
 
@@ -87,17 +53,9 @@ export async function joinRoom(
     }
   }
 
-  // Offline / no wallet: local-only join (not shared with host)
-  const room: RoomState = {
-    code: clean,
-    host: null,
-    status: "ready",
-    you: youSeat(pk),
-    opponent: ghostSeat("Host"),
-    createdAt: Date.now(),
-  };
-  saveSession({ lastRoomCode: clean, room });
-  return room;
+  throw new Error(
+    "Connect wallet first (Open in Phantom on mobile), then Join with the host code.",
+  );
 }
 
 /** Poll room from chain (lobby refresh) */

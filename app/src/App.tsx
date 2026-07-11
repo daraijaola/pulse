@@ -83,15 +83,6 @@ type DemoPhase =
   | "tapped"
   | "settling";
 
-function makeRoomCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let out = "";
-  for (let i = 0; i < 4; i++) {
-    out += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-  return out;
-}
-
 function shortPkMaybe(pk: string | null | undefined) {
   if (!pk) return "—";
   return `${pk.slice(0, 4)}…${pk.slice(-4)}`;
@@ -511,25 +502,13 @@ export default function App() {
     setLockedName("");
   }
 
-  function enterLobby(asHost: boolean, code?: string) {
-    if (!hasValidPlayer) return;
-    setIsHost(asHost);
-    setRoomCode(asHost ? makeRoomCode() : (code ?? ""));
-    if (asHost) setJoinInput("");
-    setCodeCopied(false);
-    setRoundComplete(false);
-    setFlowUnlocked((u) => Math.max(u, 1));
-    setScreen("lobby");
-    setPhase("idle");
-    setYouScore(0);
-    setOppScore(0);
-    setMs(null);
-    setGhostMs(null);
-  }
-
   async function createRoom() {
-    if (!hasValidPlayer) return;
+    if (!hasValidPlayer || chainBusy) return;
     setChainError(null);
+    if (!wallet.publicKey) {
+      setChainError("Connect wallet first (Open in Phantom on mobile).");
+      return;
+    }
     setChainBusy(true);
     try {
       const room = await apiCreateRoom(wallet.publicKey);
@@ -549,7 +528,6 @@ export default function App() {
       setLastSigs(undefined);
     } catch (e) {
       setChainError(e instanceof Error ? e.message : String(e));
-      enterLobby(true);
     } finally {
       setChainBusy(false);
     }
@@ -595,8 +573,15 @@ export default function App() {
     }
   }
 
-  async function startRound() {
+  async function startRound(forceSolo = false) {
     if (!hasValidPlayer || !roomCode || chainBusy) return;
+    // Multiplayer rule: wait for opponent unless host forces solo
+    if (!forceSolo && !oppReady) {
+      setChainError(
+        "Waiting for opponent. Share the code — or tap Play solo.",
+      );
+      return;
+    }
     clearRoundTimers();
     setChainError(null);
     setChainBusy(true);
@@ -927,7 +912,8 @@ export default function App() {
                 player name.
               </h1>
               <p className="flow-lede">
-                Lock your name, then create or join a room.
+                Connect wallet first. Then create a room or join a friend&apos;s
+                code.
               </p>
             </header>
 
@@ -937,10 +923,11 @@ export default function App() {
                 <WalletButton variant="full" />
               </div>
               <p className="wallet-strip__hint">
-                Optional now — connect Phantom (devnet) for on-chain rooms.
-                Without wallet, create/join still works solo (Ghost).
+                Phone: tap Open in Phantom, then Connect. Phantom → Settings →
+                Devnet. Both players need a wallet.
               </p>
             </section>
+            {chainError && <p className="chain-error">{chainError}</p>}
 
             <section className="player-id" aria-labelledby="player-name-label">
               <div className="player-id__head">
@@ -1152,8 +1139,6 @@ export default function App() {
               </article>
             </section>
 
-            {chainError && <p className="chain-error">{chainError}</p>}
-
             <ol className="lobby-pipeline" aria-label="Pre-round steps">
               <li className="is-done">
                 <span className="lobby-pipeline__idx">01</span>
@@ -1177,14 +1162,32 @@ export default function App() {
 
             <p className="lobby-er-hint">
               {oppReady
-                ? "Friend joined. Start when both ready."
-                : "Waiting for friend to join with this code (wallet + Join). Or Start solo vs Ghost."}
+                ? "Opponent connected. Start when ready."
+                : "Share code. Friend: Open in Phantom → Connect → Join. Start unlocks when they appear."}
             </p>
 
+            {chainError && <p className="chain-error">{chainError}</p>}
+
             <div className="flow-actions">
-              <Btn onClick={startRound} disabled={chainBusy}>
-                {chainBusy ? "Working…" : "Start round"}
+              <Btn
+                onClick={() => void startRound(false)}
+                disabled={chainBusy || !oppReady}
+              >
+                {chainBusy
+                  ? "Working…"
+                  : oppReady
+                    ? "Start match"
+                    : "Waiting for opponent…"}
               </Btn>
+              {!oppReady && isHost && (
+                <Btn
+                  variant="secondary"
+                  onClick={() => void startRound(true)}
+                  disabled={chainBusy}
+                >
+                  Play solo vs Ghost
+                </Btn>
+              )}
             </div>
           </div>
         </main>
@@ -1450,7 +1453,7 @@ export default function App() {
             </p>
 
             <div className="flow-actions">
-              <Btn onClick={startRound}>Play again</Btn>
+              <Btn onClick={() => void startRound(oppReady)}>Play again</Btn>
               <Btn
                 variant="ghost"
                 onClick={() => navigateFlow("lobby")}
@@ -1516,19 +1519,28 @@ export default function App() {
               </button>
             )}
             {screen === "lobby" && (
-              <span className="dock-status">Ready</span>
+              <button
+                type="button"
+                onClick={() => void startRound(false)}
+                disabled={!oppReady || chainBusy}
+              >
+                {oppReady ? "Start" : "Wait…"} <ArrowIcon />
+              </button>
             )}
             {screen === "arena" && (
               <button
                 type="button"
-                onClick={phase === "go" ? onTap : undefined}
+                onClick={phase === "go" ? () => void onTap() : undefined}
                 disabled={phase !== "go"}
               >
                 {phase === "go" ? "Tap" : "Live"} <ArrowIcon />
               </button>
             )}
             {screen === "result" && (
-              <button type="button" onClick={startRound}>
+              <button
+                type="button"
+                onClick={() => void startRound(oppReady)}
+              >
                 Again <ArrowIcon />
               </button>
             )}
