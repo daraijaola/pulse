@@ -359,18 +359,28 @@ export default function App() {
             PULSE
           </button>
           <nav className="shell-nav__tabs" aria-label="Game flow">
-            <span className={`shell-nav__tab ${flowTabClass("enter", screen)}`}>
+            <span
+              className={`shell-nav__tab ${flowTabClass("enter", screen)}`}
+              data-step="01"
+            >
               Enter
             </span>
-            <span className={`shell-nav__tab ${flowTabClass("lobby", screen)}`}>
+            <span
+              className={`shell-nav__tab ${flowTabClass("lobby", screen)}`}
+              data-step="02"
+            >
               Lobby
             </span>
             <span
               className={`shell-nav__tab ${flowTabClass("arena", screen, arenaLive)}`}
+              data-step="03"
             >
               Arena
             </span>
-            <span className={`shell-nav__tab ${flowTabClass("result", screen)}`}>
+            <span
+              className={`shell-nav__tab ${flowTabClass("result", screen)}`}
+              data-step="04"
+            >
               Result
             </span>
           </nav>
@@ -507,7 +517,7 @@ export default function App() {
       {/* ═══════════ ENTER — create / join (FE mock, no wallet) ═══════════ */}
       {screen === "enter" && (
         <main className="flow flow-enter">
-          <div className="flow-center">
+          <div className="flow-stack flow-stack--center">
             <header className="flow-intro">
               <p className="flow-kicker">Get in</p>
               <h1 className="flow-title">
@@ -560,55 +570,57 @@ export default function App() {
       {/* ═══════════ LOBBY — share code, matchup, start (FE mock) ═══════════ */}
       {screen === "lobby" && (
         <main className="flow flow-lobby">
-          <header className="flow-intro flow-intro--tight">
-            <p className="flow-kicker">Room ready</p>
-            <h1 className="flow-title">
-              Share
-              <br />
-              the code.
-            </h1>
-          </header>
+          <div className="flow-stack">
+            <header className="flow-intro flow-intro--tight">
+              <p className="flow-kicker">Room ready</p>
+              <h1 className="flow-title">
+                Share
+                <br />
+                the code.
+              </h1>
+            </header>
 
-          <section className="lobby-code">
-            <div className="lobby-code__row">
-              <span className="flow-label">Room code</span>
-              <button
-                type="button"
-                className="lobby-code__copy"
-                onClick={copyRoomCode}
+            <section className="lobby-code">
+              <div className="lobby-code__row">
+                <span className="flow-label">Room code</span>
+                <button
+                  type="button"
+                  className="lobby-code__copy"
+                  onClick={copyRoomCode}
+                >
+                  {codeCopied ? "Copied" : "Copy code"}
+                </button>
+              </div>
+              <p
+                className="lobby-code__value"
+                aria-label={`Room code ${roomCode}`}
               >
-                {codeCopied ? "Copied" : "Copy code"}
-              </button>
-            </div>
-            <p
-              className="lobby-code__value"
-              aria-label={`Room code ${roomCode}`}
-            >
-              {roomCode}
+                {roomCode}
+              </p>
+            </section>
+
+            <section className="matchup" aria-label="Players in room">
+              <article className="matchup-card matchup-card--you">
+                <span className="matchup-card__role">You</span>
+                <span className="matchup-card__state">Ready</span>
+                <span className="matchup-card__meta">
+                  {isHost ? "Host" : "Joined"}
+                </span>
+              </article>
+              <article className="matchup-card matchup-card--ghost">
+                <span className="matchup-card__role">Opponent</span>
+                <span className="matchup-card__state">Ghost</span>
+                <span className="matchup-card__meta">Solo demo</span>
+              </article>
+            </section>
+
+            <p className="flow-hint">
+              Next: delegate room to Ephemeral Rollup when you start.
             </p>
-          </section>
 
-          <section className="matchup" aria-label="Players in room">
-            <article className="matchup-card matchup-card--you">
-              <span className="matchup-card__role">You</span>
-              <span className="matchup-card__state">Ready</span>
-              <span className="matchup-card__meta">
-                {isHost ? "Host" : "Joined"}
-              </span>
-            </article>
-            <article className="matchup-card matchup-card--ghost">
-              <span className="matchup-card__role">Opponent</span>
-              <span className="matchup-card__state">Ghost</span>
-              <span className="matchup-card__meta">Solo demo</span>
-            </article>
-          </section>
-
-          <p className="flow-hint">
-            Next: delegate room to Ephemeral Rollup when you start.
-          </p>
-
-          <div className="flow-actions">
-            <Btn onClick={startRound}>Start round</Btn>
+            <div className="flow-actions">
+              <Btn onClick={startRound}>Start round</Btn>
+            </div>
           </div>
         </main>
       )}

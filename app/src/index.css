@@ -10,14 +10,17 @@ html,
 body,
 #root {
   margin: 0;
+  width: 100%;
   height: 100%;
   height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #root {
   display: flex;
   justify-content: center;
+  align-items: stretch;
 }
 
 html {
@@ -30,7 +33,7 @@ body {
   font-weight: 400;
   line-height: 20px;
   color: var(--color--blue-900);
-  background-color: var(--color--light);
+  background-color: var(--color--blue-900);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
