@@ -7,6 +7,7 @@
 import { config } from "./config";
 import { makeRoomCode, saveSession } from "./session-store";
 import type { RoomState, RoundPhase, RoundState } from "./types";
+import { onchainCreateRoom, onchainStartRound, onchainTapSolo, onchainSettle } from "./pulse-onchain";
 
 function ghostSeat(name = "Ghost"): RoomState["opponent"] {
   return {
@@ -30,8 +31,17 @@ function youSeat(pk: string | null): RoomState["you"] {
   };
 }
 
-/** Create a local room (mock host) */
+/** Create room — on-chain when wallet connected, else local mock */
 export async function createRoom(hostPk: string | null): Promise<RoomState> {
+  if (hostPk && config.programId) {
+    try {
+      const { room, signature } = await onchainCreateRoom(hostPk);
+      console.info("[pulse] create_room on-chain", signature, room.code);
+      return room;
+    } catch (e) {
+      console.warn("[pulse] create_room on-chain failed, falling back to mock", e);
+    }
+  }
   const code = makeRoomCode(4);
   const room: RoomState = {
     code,

@@ -31,14 +31,16 @@ export const config = {
     (env.VITE_ER_VALIDATOR as string) ||
     "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57",
 
-  /** Anchor program id — empty until deploy */
-  programId: (env.VITE_PULSE_PROGRAM_ID as string) || "",
+  /** Deployed devnet program */
+  programId:
+    (env.VITE_PULSE_PROGRAM_ID as string) ||
+    "2ATahSWWWkFu1j4SzbJ2RYerHR445ZqTTLCh9bWsFcip",
 
   /**
-   * When true, pulseApi uses in-memory mock (FE can ship without program).
-   * Flip to false after program deploy + IDL wiring.
+   * When true, round phases can still simulate ER delays.
+   * create_room prefers on-chain when wallet is connected.
    */
-  useMockChain: env.VITE_USE_MOCK_CHAIN !== "false",
+  useMockChain: env.VITE_USE_MOCK_CHAIN === "true",
 } as const;
 
 export function shortPk(pk: string, n = 4): string {
