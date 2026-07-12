@@ -1,23 +1,30 @@
+# deps / build
 node_modules/
 dist/
 build/
-.env
-.env.*
-!.env.example
 target/
 .anchor/
 test-ledger/
-**/.DS_Store
-*.log
-.idea/
-.vscode/
 coverage/
 .turbo/
-next-env.d.ts
 
-scripts/.e2e-keys/
-app/e2e-devnet.mjs
-_live_check/
-.vercel/
+# env & secrets
+.env
+.env.*
+!.env.example
 *.pem
+scripts/.e2e-keys/
+app/.e2e-keys/
 
+# local junk / deploy artifacts
+_live_check/
+_push_*.txt
+.vercel/
+app/e2e-*.mjs
+*.log
+
+# editors / OS
+**/.DS_Store
+.idea/
+.vscode/
+next-env.d.ts

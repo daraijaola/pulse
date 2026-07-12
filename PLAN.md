@@ -1,8 +1,10 @@
 # PULSE — Solana Blitz v6 Ship Plan
 
+> **Historical research / planning notes** from the start of the weekend.  
+> For the **shipped product**, see **[README.md](./README.md)** and **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)**.
+
 **Product:** Mobile-first real-time reaction battles on Solana  
 **Hackathon:** Solana Blitz v6 · MagicBlock · theme **Mobile**  
-**Deadline:** Sun 12 Jul 2026 ~15:00 UTC (Luma end)  
 **Repo:** https://github.com/daraijaola/pulse  
 **Rule:** One path. One demo. No feature thrash. UI theme owned by human.
 

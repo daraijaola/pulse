@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.vercel
+.e2e-keys/
+e2e-*.mjs

@@ -1,37 +1,32 @@
-# PULSE on-chain (scaffold)
+# programs/pulse
 
-Not deployed yet. FE uses `VITE_USE_MOCK_CHAIN=true` until this lands.
+Anchor program for PULSE rooms + MagicBlock Ephemeral Rollup hooks.
 
-## Target program
+**Devnet program id:** `2ATahSWWWkFu1j4SzbJ2RYerHR445ZqTTLCh9bWsFcip`
 
-Anchor program with MagicBlock:
+## Instructions
 
-| Instruction | Layer | Purpose |
-|-------------|--------|---------|
-| `initialize_room` | Base | Create room PDA |
-| `join_room` | Base | Second player |
-| `delegate_room` | Base → ER | Delegate room PDA to ER validator |
-| `request_pulse` | ER / base | VRF request for fair GO |
-| `callback_pulse` | VRF callback | Store go window |
-| `tap` | ER | Record reaction / first tap |
-| `settle` | ER → Base | Commit + undelegate, set winner |
+| Ix | Layer | Purpose |
+|----|--------|---------|
+| `create_room` | Base | Init room PDA (4-char code) |
+| `join_room` | Base | Set challenger |
+| `start_round` | Base | LIVE + reset scores |
+| `delegate_room` | Base | Delegate PDA to ER (+ validator remaining account) |
+| `tap` | ER/Base | One player’s reaction_ms |
+| `tap_solo` | ER/Base | Host writes host + ghost ms |
+| `finish_match` | Base | One-shot scores + SETTLED (fallback) |
+| `settle` | ER/Base | Compute winner |
+| `settle_and_undelegate` | ER | Settle + commit + undelegate |
+| `commit_room` / `undelegate_room` | ER | Commit / exit ER |
 
-## References (do not reinvent)
+Built with `ephemeral-rollups-sdk` (`#[ephemeral]`, `#[delegate]`, `#[commit]`).
 
-- ER counter: https://github.com/magicblock-labs/magicblock-engine-examples/tree/main/counter
-- VRF dice: https://github.com/magicblock-labs/magicblock-engine-examples/tree/main/roll-dice
-- Docs: https://docs.magicblock.gg/
+## Source
 
-## Devnet
+[`pulse/src/lib.rs`](./pulse/src/lib.rs)
 
-- Router: `https://devnet-router.magicblock.app`
-- ER Asia: `https://devnet-as.magicblock.app`
-- Validator: `MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57`
+## Devnet endpoints
 
-## Next engineer step
-
-1. Install Rust + Anchor on builder or VM  
-2. `anchor init pulse` (or copy counter + rename)  
-3. Add VRF + room state  
-4. Deploy devnet → set `VITE_PULSE_PROGRAM_ID`  
-5. Set `VITE_USE_MOCK_CHAIN=false` and replace `pulse-api.ts` mock bodies  
+- Base: `https://api.devnet.solana.com`  
+- ER Asia: `https://devnet-as.magicblock.app`  
+- Validator: `MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57`  
