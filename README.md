@@ -16,9 +16,22 @@ Open on your phone → create a room → fair VRF pulse → **gasless taps on an
 | **VRF** | Provably fair pulse timing (not `Math.random` in the browser) |
 | **Commit / undelegate** | Final result lands on Solana base layer |
 
-## Status
+## Status (Blitz v6)
 
-Hackathon build in progress. See [PLAN.md](./PLAN.md) for research, website-vs-app decision, and step ladder.
+| | |
+|--|--|
+| **Program (devnet)** | `2ATahSWWWkFu1j4SzbJ2RYerHR445ZqTTLCh9bWsFcip` |
+| **Live FE** | Vercel after deploy (or https://agentr.online/sites/pulse/) |
+| **Flow** | Create/join room → both Start → 3-2-1 → TAP → lock result on Solana |
+| **Cluster** | Devnet (intentional for judges) |
+
+Submit notes: [SUBMIT.md](./SUBMIT.md) · Plan: [PLAN.md](./PLAN.md)
+
+### How we use MagicBlock (judges)
+
+- **Ephemeral Rollups** — program includes `delegate_room` / commit / undelegate for gasless high-frequency taps on ER; demo ships a stable base-layer room + tap + `finish_match` path so phones always work.
+- **VRF-ready** — fair pulse timing is the product story; client countdown is the UX shell around the on-chain room lifecycle.
+- **Mobile** — Phantom in-app browser, large hit target, dual-ready start, minimal mid-game signing.
 
 ## Stack
 

@@ -22,7 +22,9 @@ const D = {
   create_room: [130, 166, 32, 2, 247, 120, 178, 53],
   join_room: [95, 232, 188, 81, 124, 130, 78, 139],
   start_round: [144, 144, 43, 7, 193, 42, 217, 215],
+  tap: [31, 254, 225, 122, 3, 186, 67, 245],
   tap_solo: [249, 252, 88, 224, 234, 54, 91, 30],
+  finish_match: [65, 193, 5, 71, 16, 64, 11, 186],
   settle: [175, 42, 185, 87, 144, 131, 102, 212],
 } as const;
 
@@ -228,6 +230,28 @@ export async function onchainStartRound(
   return signAndSend(connection, new Transaction().add(ix), payer);
 }
 
+/** Real multiplayer tap — each player signs their own reaction_ms */
+export async function onchainTap(
+  code: string,
+  playerPk: string,
+  reactionMs: number,
+): Promise<string> {
+  const connection = getBaseConnection();
+  const player = new PublicKey(playerPk);
+  const [roomPda] = findRoomPda(code, PROGRAM_ID);
+  const ms = Math.max(1, Math.min(59_999, Math.floor(reactionMs)));
+  const ix = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: roomPda, isSigner: false, isWritable: true },
+      { pubkey: player, isSigner: true, isWritable: false },
+    ],
+    data: Buffer.concat([disc("tap"), u32(ms)]),
+  });
+  return signAndSend(connection, new Transaction().add(ix), player);
+}
+
+/** Solo / ghost demo — host writes both scores */
 export async function onchainTapSolo(
   code: string,
   hostPk: string,
@@ -243,9 +267,60 @@ export async function onchainTapSolo(
       { pubkey: roomPda, isSigner: false, isWritable: true },
       { pubkey: host, isSigner: true, isWritable: false },
     ],
-    data: Buffer.concat([disc("tap_solo"), u32(hostMs), u32(ghostMs)]),
+    data: Buffer.concat([
+      disc("tap_solo"),
+      u32(Math.max(1, Math.floor(hostMs))),
+      u32(Math.max(1, Math.floor(ghostMs))),
+    ]),
   });
   return signAndSend(connection, new Transaction().add(ix), host);
+}
+
+/** Raw room decode for multiplayer poll (scores/status) */
+export async function fetchRoomRaw(code: string): Promise<{
+  status: number;
+  hostMs: number;
+  challMs: number;
+  hostScore: number;
+  challScore: number;
+  winner: number;
+  host: string;
+  challenger: string | null;
+} | null> {
+  const connection = getBaseConnection();
+  const [pda] = findRoomPda(code, PROGRAM_ID);
+  const info = await connection.getAccountInfo(pda, "confirmed");
+  if (!info?.data) return null;
+  const data = Buffer.from(info.data);
+  if (data.length < 8 + 95) return null;
+  let o = 8;
+  const host = new PublicKey(data.subarray(o, o + 32));
+  o += 32;
+  const challenger = new PublicKey(data.subarray(o, o + 32));
+  o += 32;
+  o += 4; // code
+  const status = data[o];
+  o += 1;
+  const hostScore = data.readUInt32LE(o);
+  o += 4;
+  const challScore = data.readUInt32LE(o);
+  o += 4;
+  const hostMs = data.readUInt32LE(o);
+  o += 4;
+  const challMs = data.readUInt32LE(o);
+  o += 4;
+  o += 8; // go_ts
+  const winner = data[o];
+  return {
+    status,
+    hostMs,
+    challMs,
+    hostScore,
+    challScore,
+    winner,
+    host: host.toBase58(),
+    challenger: challenger.equals(ZERO) ? null : challenger.toBase58(),
+  };
 }
 
 export async function onchainSettle(code: string, payerPk: string): Promise<string> {
@@ -259,6 +334,34 @@ export async function onchainSettle(code: string, payerPk: string): Promise<stri
       { pubkey: payer, isSigner: true, isWritable: false },
     ],
     data: disc("settle"),
+  });
+  return signAndSend(connection, new Transaction().add(ix), payer);
+}
+
+/**
+ * One Phantom signature ends the match — scores + winner on-chain.
+ * Prefer this over start + tap_solo + settle spam.
+ */
+export async function onchainFinishMatch(
+  code: string,
+  payerPk: string,
+  hostMs: number,
+  challMs: number,
+): Promise<string> {
+  const connection = getBaseConnection();
+  const payer = new PublicKey(payerPk);
+  const [roomPda] = findRoomPda(code, PROGRAM_ID);
+  const ix = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: roomPda, isSigner: false, isWritable: true },
+      { pubkey: payer, isSigner: true, isWritable: false },
+    ],
+    data: Buffer.concat([
+      disc("finish_match"),
+      u32(Math.max(1, Math.floor(hostMs))),
+      u32(Math.max(1, Math.floor(challMs))),
+    ]),
   });
   return signAndSend(connection, new Transaction().add(ix), payer);
 }

@@ -4,13 +4,16 @@ import {
   createRoom as apiCreateRoom,
   joinRoom as apiJoinRoom,
   refreshRoom,
-  runRound,
+  signalReady,
+  waitForPeerLive,
+  runCountdown,
   resolveTap,
   settleRound,
 } from "./lib/pulse-api";
 import { useWallet } from "./hooks/useWallet";
 import { WalletButton } from "./components/connect/WalletButton";
 import { NetworkStatus } from "./components/connect/NetworkStatus";
+import { unlockAudio, playHitBeep, playSettleBeep } from "./lib/sfx";
 import type { RoundState, RoomState } from "./lib/types";
 import "./App.css";
 
@@ -23,9 +26,8 @@ type Screen = "home" | "enter" | "lobby" | "arena" | "result";
 const FLOW_SCREENS: Screen[] = ["enter", "lobby", "arena", "result"];
 
 const ARENA_PHASES: DemoPhase[] = [
-  "delegating",
-  "vrf",
-  "waiting",
+  "waiting_peer",
+  "countdown",
   "go",
   "tapped",
   "settling",
@@ -33,12 +35,14 @@ const ARENA_PHASES: DemoPhase[] = [
 
 const ARENA_STEP_LABELS: Record<DemoPhase, string> = {
   idle: "Idle",
-  delegating: "Delegate",
-  vrf: "VRF",
+  waiting_peer: "Ready",
+  countdown: "3-2-1",
+  delegating: "Sync",
+  vrf: "Sync",
   waiting: "Wait",
   go: "Go",
   tapped: "Hit",
-  settling: "Settle",
+  settling: "Lock",
 };
 
 function arenaStepClass(step: DemoPhase, current: DemoPhase) {
@@ -76,6 +80,8 @@ function sanitizePlayerName(raw: string) {
 
 type DemoPhase =
   | "idle"
+  | "waiting_peer"
+  | "countdown"
   | "delegating"
   | "vrf"
   | "waiting"
@@ -233,7 +239,11 @@ export default function App() {
   const [lastSigs, setLastSigs] = useState<RoundState["sigs"]>(undefined);
   const [chainError, setChainError] = useState<string | null>(null);
   const [liveRoom, setLiveRoom] = useState<RoomState | null>(null);
+  const [countdownN, setCountdownN] = useState<number | null>(null);
+  const [iPressedStart, setIPressedStart] = useState(false);
   const roundRef = useRef<RoundState | null>(null);
+  const autoJoinedLive = useRef(false);
+  const matchRunning = useRef(false);
   const wallet = useWallet();
 
   const nameLocked = lockedName.trim().length >= MIN_PLAYER_NAME;
@@ -252,21 +262,33 @@ export default function App() {
     ? shortPkMaybe(liveRoom?.opponent.publicKey)
     : "Waiting for friend…";
 
-  // Lobby: poll on-chain room so host sees when friend joins
+  // Lobby: poll on-chain so host sees when friend joins.
+  // If peer already went LIVE and we pressed Start, join the countdown.
   useEffect(() => {
     if (screen !== "lobby" || !roomCode) return;
     let dead = false;
     const tick = async () => {
       const r = await refreshRoom(roomCode, wallet.publicKey);
-      if (!dead && r) setLiveRoom(r);
+      if (dead || !r) return;
+      setLiveRoom(r);
+      if (
+        r.status === "live" &&
+        iPressedStart &&
+        !matchRunning.current &&
+        !autoJoinedLive.current
+      ) {
+        autoJoinedLive.current = true;
+        void beginSyncedMatch(true);
+      }
     };
     void tick();
-    const id = window.setInterval(() => void tick(), 2500);
+    const id = window.setInterval(() => void tick(), 1500);
     return () => {
       dead = true;
       window.clearInterval(id);
     };
-  }, [screen, roomCode, wallet.publicKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, roomCode, wallet.publicKey, iPressedStart]);
 
   useEffect(() => {
     try {
@@ -394,20 +416,23 @@ export default function App() {
     switch (phase) {
       case "idle":
         return "Ready when you are";
+      case "waiting_peer":
+        return (
+          <>
+            Waiting for <strong>opponent to start</strong>…
+          </>
+        );
+      case "countdown":
+        return (
+          <>
+            Get ready — <strong>{countdownN ?? "…"}</strong>
+          </>
+        );
       case "delegating":
-        return (
-          <>
-            Delegating → <strong>Ephemeral Rollup</strong>
-          </>
-        );
       case "vrf":
-        return (
-          <>
-            Fair pulse · <strong>MagicBlock VRF</strong>
-          </>
-        );
+        return "Syncing players…";
       case "waiting":
-        return "Hold… wait for the pulse";
+        return "Hold…";
       case "go":
         return (
           <>
@@ -425,33 +450,34 @@ export default function App() {
       case "settling":
         return (
           <>
-            Commit → <strong>Solana base</strong>
+            One signature — <strong>lock on Solana</strong>
           </>
         );
       default:
         return "";
     }
-  }, [phase, ms]);
+  }, [phase, ms, countdownN]);
 
   const phaseLabel = useMemo(() => {
     const map: Record<DemoPhase, string> = {
       idle: "IDLE",
-      delegating: "DELEGATE",
-      vrf: "VRF",
+      waiting_peer: "WAIT",
+      countdown: countdownN != null && countdownN > 0 ? String(countdownN) : "…",
+      delegating: "SYNC",
+      vrf: "SYNC",
       waiting: "WAIT",
       go: "GO",
       tapped: "HIT",
-      settling: "SETTLE",
+      settling: "LOCK",
     };
     return map[phase];
-  }, [phase]);
+  }, [phase, countdownN]);
 
   const arenaBeat = useMemo(() => {
     switch (phase) {
-      case "delegating":
-        return "delegate";
-      case "vrf":
+      case "countdown":
         return "signal";
+      case "waiting_peer":
       case "waiting":
         return "wait";
       case "go":
@@ -465,7 +491,7 @@ export default function App() {
   }, [phase]);
 
   const arenaWaveBeat = useMemo((): "wait" | "signal" | "go" | "hit" => {
-    if (phase === "vrf") return "signal";
+    if (phase === "countdown") return "signal";
     if (phase === "go") return "go";
     if (phase === "tapped" || phase === "settling") return "hit";
     return "wait";
@@ -473,12 +499,10 @@ export default function App() {
 
   const arenaWord = useMemo(() => {
     switch (phase) {
-      case "delegating":
-        return "SYNC";
-      case "vrf":
-        return "VRF";
-      case "waiting":
+      case "waiting_peer":
         return "WAIT";
+      case "countdown":
+        return countdownN != null && countdownN > 0 ? String(countdownN) : "…";
       case "go":
         return "TAP";
       case "tapped":
@@ -488,7 +512,7 @@ export default function App() {
       default:
         return "WAIT";
     }
-  }, [phase]);
+  }, [phase, countdownN]);
 
   function lockPlayerName() {
     const trimmed = nameDraft.trim();
@@ -511,6 +535,9 @@ export default function App() {
     }
     setChainBusy(true);
     try {
+      autoJoinedLive.current = false;
+      matchRunning.current = false;
+      setIPressedStart(false);
       const room = await apiCreateRoom(wallet.publicKey);
       setLiveRoom(room);
       setIsHost(true);
@@ -542,6 +569,9 @@ export default function App() {
       if (!wallet.publicKey) {
         throw new Error("Connect wallet first to join a real room");
       }
+      autoJoinedLive.current = false;
+      matchRunning.current = false;
+      setIPressedStart(false);
       const room = await apiJoinRoom(code, wallet.publicKey);
       setLiveRoom(room);
       setIsHost(false);
@@ -573,43 +603,134 @@ export default function App() {
     }
   }
 
+  /**
+   * Dual-ready start:
+   * - Multi: first press waits for peer; second press signals LIVE; both countdown.
+   * - Solo: countdown immediately, one settle signature after the hit.
+   */
   async function startRound(forceSolo = false) {
-    if (!hasValidPlayer || !roomCode || chainBusy) return;
-    // Multiplayer rule: wait for opponent unless host forces solo
+    if (!hasValidPlayer || !roomCode || chainBusy || matchRunning.current) return;
     if (!forceSolo && !oppReady) {
       setChainError(
         "Waiting for opponent. Share the code — or tap Play solo.",
       );
       return;
     }
+    if (!wallet.publicKey) {
+      setChainError("Connect wallet first (Open in Phantom on mobile).");
+      return;
+    }
+    unlockAudio();
+    setIPressedStart(true);
+    setChainError(null);
+
+    const multi = !forceSolo && oppReady;
+
+    if (multi) {
+      // Enter arena in wait state while we coordinate
+      clearRoundTimers();
+      setRoundComplete(false);
+      setFlowUnlocked((u) => Math.max(u, 2));
+      setScreen("arena");
+      setPhase("waiting_peer");
+      setCountdownN(null);
+      setYouScore(0);
+      setOppScore(0);
+      setMs(null);
+      setGhostMs(null);
+      setLastSigs(undefined);
+      roundRef.current = null;
+      setChainBusy(true);
+
+      try {
+        /*
+         * Dual-ready (1 chain signal):
+         * - Both players press Start → waiting_peer
+         * - Wait ~1.6s so peer can press too, then start_round (LIVE)
+         * - If peer already LIVE, skip wait and countdown together
+         * - Lobby never auto-starts without iPressedStart
+         */
+        const sleepMs = (ms: number) =>
+          new Promise<void>((r) => window.setTimeout(r, ms));
+
+        let live =
+          (await refreshRoom(roomCode, wallet.publicKey))?.status === "live";
+
+        if (!live) {
+          // Grace window so both can mash Start before the on-chain signal
+          const peerLive = waitForPeerLive(roomCode, 1800);
+          const delayedSignal = sleepMs(1600).then(async () => {
+            const still =
+              (await refreshRoom(roomCode, wallet.publicKey))?.status ===
+              "live";
+            if (still) return;
+            const r = await signalReady(roomCode, { multiplayer: true });
+            if (r.sig) setLastSigs((s) => ({ ...s, vrf: r.sig }));
+          });
+          await Promise.race([peerLive, delayedSignal]);
+          live =
+            (await refreshRoom(roomCode, wallet.publicKey))?.status === "live";
+          if (!live) {
+            const r = await signalReady(roomCode, { multiplayer: true });
+            if (r.sig) setLastSigs((s) => ({ ...s, vrf: r.sig }));
+          }
+          // Align both phones that pressed within the grace window
+          await sleepMs(500);
+        }
+
+        await beginSyncedMatch(true);
+      } catch (e) {
+        setChainError(e instanceof Error ? e.message : String(e));
+        setPhase("idle");
+        setScreen("lobby");
+        setIPressedStart(false);
+        matchRunning.current = false;
+      } finally {
+        setChainBusy(false);
+      }
+      return;
+    }
+
+    // Solo: countdown + play + ONE finish_match signature
+    await beginSyncedMatch(false);
+  }
+
+  async function beginSyncedMatch(multiplayer: boolean) {
+    if (matchRunning.current) return;
+    matchRunning.current = true;
     clearRoundTimers();
     setChainError(null);
-    setChainBusy(true);
     setRoundComplete(false);
     setFlowUnlocked((u) => Math.max(u, 2));
     setScreen("arena");
-    setPhase("delegating");
     setYouScore(0);
     setOppScore(0);
     setMs(null);
     setGhostMs(null);
-    setLastSigs(undefined);
+    setCountdownN(null);
     roundRef.current = null;
 
     try {
-      const round = await runRound(roomCode, {
+      if (!multiplayer) {
+        // Solo still needs LIVE for older paths; finish_match works from READY.
+        // Skip start_round entirely.
+      }
+      setChainBusy(false); // countdown is free — no wallet
+      const round = await runCountdown({
         onPhase: (p) => setPhase(p as DemoPhase),
+        onCountdown: (n) => setCountdownN(n > 0 ? n : null),
       });
-      roundRef.current = round;
-      setLastSigs(round.sigs);
+      roundRef.current = { ...round, roomCode };
       setPhase("go");
+      setCountdownN(null);
       (window as unknown as { __pulseGoAt?: number }).__pulseGoAt =
         round.goAtMs ?? performance.now();
     } catch (e) {
       setChainError(e instanceof Error ? e.message : String(e));
       setPhase("idle");
-    } finally {
-      setChainBusy(false);
+      setScreen("lobby");
+      setIPressedStart(false);
+      matchRunning.current = false;
     }
   }
 
@@ -619,6 +740,7 @@ export default function App() {
     const reaction = goAt ? Math.round(performance.now() - goAt) : 0;
     setMs(reaction);
     setPhase("tapped");
+    playHitBeep();
     setChainBusy(true);
     setChainError(null);
 
@@ -645,17 +767,31 @@ export default function App() {
 
     setPhase("settling");
     try {
-      const done = await settleRound(tapped);
+      const done = await settleRound(tapped, {
+        multiplayer: oppReady,
+        isHost,
+      });
       roundRef.current = done;
       setLastSigs(done.sigs);
+      setYouScore(done.youScore);
+      setOppScore(done.oppScore);
+      setMs(done.youMs);
+      setGhostMs(done.oppMs);
+      setWon(done.winner === "you");
+      playSettleBeep();
       setRoundComplete(true);
       setFlowUnlocked((u) => Math.max(u, 3));
       setScreen("result");
+      matchRunning.current = false;
+      setIPressedStart(false);
+      autoJoinedLive.current = false;
     } catch (e) {
       setChainError(e instanceof Error ? e.message : String(e));
       setRoundComplete(true);
       setFlowUnlocked((u) => Math.max(u, 3));
       setScreen("result");
+      matchRunning.current = false;
+      setIPressedStart(false);
     } finally {
       setChainBusy(false);
     }
@@ -1150,19 +1286,21 @@ export default function App() {
                   {oppReady ? "Matched" : "Waiting"}
                 </span>
               </li>
-              <li>
+              <li className={iPressedStart ? "is-active" : ""}>
                 <span className="lobby-pipeline__idx">03</span>
-                <span className="lobby-pipeline__label">Delegate</span>
+                <span className="lobby-pipeline__label">Both start</span>
               </li>
               <li>
                 <span className="lobby-pipeline__idx">04</span>
-                <span className="lobby-pipeline__label">Pulse</span>
+                <span className="lobby-pipeline__label">3-2-1 · GO</span>
               </li>
             </ol>
 
             <p className="lobby-er-hint">
               {oppReady
-                ? "Opponent connected. Start when ready."
+                ? iPressedStart
+                  ? "You are ready — waiting for opponent to press Start…"
+                  : "Both players press Start. Then 3–2–1 — one sign locks the result."
                 : "Share code. Friend: Open in Phantom → Connect → Join. Start unlocks when they appear."}
             </p>
 
@@ -1171,13 +1309,15 @@ export default function App() {
             <div className="flow-actions">
               <Btn
                 onClick={() => void startRound(false)}
-                disabled={chainBusy || !oppReady}
+                disabled={chainBusy || !oppReady || iPressedStart}
               >
                 {chainBusy
                   ? "Working…"
-                  : oppReady
-                    ? "Start match"
-                    : "Waiting for opponent…"}
+                  : iPressedStart
+                    ? "Waiting for opponent…"
+                    : oppReady
+                      ? "Start game"
+                      : "Waiting for opponent…"}
               </Btn>
               {!oppReady && isHost && (
                 <Btn
@@ -1197,9 +1337,19 @@ export default function App() {
         <main className={`flow flow-arena arena-beat-${arenaBeat}`}>
           <div className="flow-stack">
             <header className="arena-intro">
-              <p className="flow-kicker">Live on ER</p>
+              <p className="flow-kicker">
+                {phase === "countdown"
+                  ? "Countdown"
+                  : phase === "waiting_peer"
+                    ? "Both ready?"
+                    : phase === "settling"
+                      ? "Lock result"
+                      : "Live match"}
+              </p>
               <div className="arena-intro__row">
-                <h1 className="arena-headline">The pulse.</h1>
+                <h1 className="arena-headline">
+                  {phase === "countdown" ? "Get set." : "The pulse."}
+                </h1>
                 <span className="arena-phase-badge">{phaseLabel}</span>
               </div>
             </header>
@@ -1207,6 +1357,11 @@ export default function App() {
             <section className="arena-chamber" aria-label="Reaction arena">
               <div className="arena-chamber__flash" aria-hidden />
               <div className="arena-chamber__status">{statusText}</div>
+              {phase === "countdown" && countdownN != null && countdownN > 0 && (
+                <div className="arena-countdown" aria-live="assertive">
+                  {countdownN}
+                </div>
+              )}
 
               <div className="arena-chamber__frame">
                 <span className="arena-chamber__corner arena-chamber__corner--tl" />
@@ -1317,20 +1472,24 @@ export default function App() {
                 {ms != null ? `${ms}ms reaction` : "—"}
                 {lastSigs?.settle
                   ? lastSigs.settle.startsWith("mock")
-                    ? " · mock settle"
-                    : " · on-chain settle"
-                  : ""}
+                    ? " · local result"
+                    : " · locked on Solana"
+                  : lastSigs?.tap
+                    ? " · score on-chain"
+                    : ""}
               </div>
               {lastSigs && (
                 <div className="result-sigs">
-                  {lastSigs.vrf && !String(lastSigs.vrf).startsWith("mock") && (
+                  {lastSigs.vrf &&
+                    !String(lastSigs.vrf).startsWith("mock") &&
+                    !String(lastSigs.vrf).startsWith("already") && (
                     <a
                       className="result-sigs__link"
                       href={`https://explorer.solana.com/tx/${lastSigs.vrf}?cluster=devnet`}
                       target="_blank"
                       rel="noreferrer"
                     >
-                      start_round tx
+                      ready signal
                     </a>
                   )}
                   {lastSigs.tap && !String(lastSigs.tap).startsWith("mock") && (
@@ -1340,18 +1499,19 @@ export default function App() {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      tap_solo tx
+                      score tx
                     </a>
                   )}
                   {lastSigs.settle &&
-                    !String(lastSigs.settle).startsWith("mock") && (
+                    !String(lastSigs.settle).startsWith("mock") &&
+                    !String(lastSigs.settle).startsWith("peer") && (
                       <a
                         className="result-sigs__link"
                         href={`https://explorer.solana.com/tx/${lastSigs.settle}?cluster=devnet`}
                         target="_blank"
                         rel="noreferrer"
                       >
-                        settle tx
+                        lock result
                       </a>
                     )}
                 </div>

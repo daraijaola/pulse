@@ -117,6 +117,23 @@ pub mod pulse {
         }
 
         msg!("tap who={} ms={} score={}", who, reaction_ms, score);
+
+        // Auto-settle when both seats have tapped (or solo host-only if no challenger)
+        let both = room.host_ms > 0
+            && (room.challenger == Pubkey::default() || room.challenger_ms > 0);
+        if both {
+            if room.challenger_ms == 0 {
+                room.winner = 1;
+            } else if room.host_ms < room.challenger_ms {
+                room.winner = 1;
+            } else if room.challenger_ms < room.host_ms {
+                room.winner = 2;
+            } else {
+                room.winner = 3;
+            }
+            room.status = STATUS_SETTLED;
+            msg!("auto-settled winner={}", room.winner);
+        }
         Ok(())
     }
 
@@ -133,6 +150,46 @@ pub mod pulse {
         room.host_score = 1000u32.saturating_sub(host_ms.min(1000));
         room.challenger_score = 1000u32.saturating_sub(ghost_ms.min(1000));
         msg!("solo tap host_ms={} ghost_ms={}", host_ms, ghost_ms);
+        Ok(())
+    }
+
+    /// One-shot end of match: write both reaction times + settle.
+    /// Works from READY / LIVE / SETTLED (rematch). Cuts mid-game Phantom spam.
+    pub fn finish_match(ctx: Context<Settle>, host_ms: u32, chall_ms: u32) -> Result<()> {
+        let room = &mut ctx.accounts.room;
+        require!(
+            room.status == STATUS_READY
+                || room.status == STATUS_LIVE
+                || room.status == STATUS_SETTLED,
+            PulseError::BadStatus
+        );
+        require!(
+            ctx.accounts.payer.key() == room.host
+                || ctx.accounts.payer.key() == room.challenger,
+            PulseError::NotPlayer
+        );
+        require!(host_ms > 0 && host_ms < 60_000, PulseError::BadReaction);
+        require!(chall_ms > 0 && chall_ms < 60_000, PulseError::BadReaction);
+
+        room.host_ms = host_ms;
+        room.challenger_ms = chall_ms;
+        room.host_score = 1000u32.saturating_sub(host_ms.min(1000));
+        room.challenger_score = 1000u32.saturating_sub(chall_ms.min(1000));
+        if host_ms < chall_ms {
+            room.winner = 1;
+        } else if chall_ms < host_ms {
+            room.winner = 2;
+        } else {
+            room.winner = 3;
+        }
+        room.status = STATUS_SETTLED;
+        room.go_ts = Clock::get()?.unix_timestamp;
+        msg!(
+            "finish_match host_ms={} chall_ms={} winner={}",
+            host_ms,
+            chall_ms,
+            room.winner
+        );
         Ok(())
     }
 

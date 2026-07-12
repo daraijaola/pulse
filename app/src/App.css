@@ -21,7 +21,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("/sites/pulse/grid-blue.svg");
+  background-image: url("/grid-blue.svg");
   background-repeat: repeat;
   background-size: 3.5em;
   background-position: 0 0;
@@ -232,7 +232,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("/sites/pulse/grid-blue.svg");
+  background-image: url("/grid-blue.svg");
   background-size: 2.5em;
   opacity: 0.28;
   pointer-events: none;
@@ -788,7 +788,7 @@
   justify-content: center;
   gap: 1.25rem;
   background: var(--color--light);
-  background-image: url("/sites/pulse/grid-blue.svg");
+  background-image: url("/grid-blue.svg");
   background-size: 3.5em;
   padding: 2rem;
 }
@@ -1388,7 +1388,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("/sites/pulse/grid-blue.svg");
+  background-image: url("/grid-blue.svg");
   background-size: 2.2em;
   opacity: 0.14;
   pointer-events: none;
@@ -2454,7 +2454,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("/sites/pulse/grid-blue.svg");
+  background-image: url("/grid-blue.svg");
   background-size: 2.4em;
   opacity: 0.26;
   pointer-events: none;
@@ -2900,7 +2900,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("/sites/pulse/grid-blue.svg");
+  background-image: url("/grid-blue.svg");
   background-size: 2.2em;
   opacity: 0.22;
   pointer-events: none;
@@ -3273,4 +3273,30 @@
   font-size: 0.75rem;
   color: #a12b2b;
   font-family: var(--font-mono, monospace);
+}
+
+/* Big 3-2-1 countdown */
+.arena-countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display, var(--font-mono));
+  font-size: clamp(5.5rem, 28vw, 9rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--color--blue-400);
+  text-shadow: 4px 4px 0 var(--color--blue-900);
+  pointer-events: none;
+  animation: arena-count-pop 0.55s var(--ease-overflow) both;
+}
+@keyframes arena-count-pop {
+  0% { transform: scale(0.55); opacity: 0; }
+  45% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.arena-chamber {
+  position: relative;
 }

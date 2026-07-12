@@ -31,6 +31,8 @@ export type RoomStatus =
 
 export type RoundPhase =
   | "idle"
+  | "waiting_peer"
+  | "countdown"
   | "delegating"
   | "vrf"
   | "waiting"

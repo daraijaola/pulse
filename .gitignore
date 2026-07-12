@@ -14,3 +14,10 @@ test-ledger/
 coverage/
 .turbo/
 next-env.d.ts
+
+scripts/.e2e-keys/
+app/e2e-devnet.mjs
+_live_check/
+.vercel/
+*.pem
+
