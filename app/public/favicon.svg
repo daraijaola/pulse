@@ -1,6 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" fill="#000f1d"/>
-  <rect x="10" y="10" width="44" height="44" stroke="#4da2ff" stroke-width="3"/>
-  <circle cx="32" cy="32" r="10" fill="#4da2ff"/>
-  <circle cx="32" cy="32" r="4" fill="#000f1d"/>
+  <!-- PULSE mark — navy keycap + pulse bar (tab icon) -->
+  <rect width="64" height="64" rx="12" fill="#000f1d"/>
+  <!-- outer keycap frame -->
+  <rect x="8" y="8" width="48" height="48" rx="8" fill="#001a2e" stroke="#4da2ff" stroke-width="2.5"/>
+  <!-- face -->
+  <rect x="12" y="12" width="40" height="40" rx="5" fill="#0a1628"/>
+  <!-- pulse waveform -->
+  <path
+    d="M16 34h6l3-10 4 20 4-16 3 8h12"
+    stroke="#4da2ff"
+    stroke-width="3"
+    stroke-linecap="square"
+    stroke-linejoin="miter"
+    fill="none"
+  />
+  <!-- accent GO dot -->
+  <circle cx="48" cy="20" r="3.5" fill="#4da2ff"/>
 </svg>

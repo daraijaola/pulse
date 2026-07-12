@@ -29,9 +29,9 @@ Submit notes: [SUBMIT.md](./SUBMIT.md) · Plan: [PLAN.md](./PLAN.md)
 
 ### How we use MagicBlock (judges)
 
-- **Ephemeral Rollups** — program includes `delegate_room` / commit / undelegate for gasless high-frequency taps on ER; demo ships a stable base-layer room + tap + `finish_match` path so phones always work.
-- **VRF-ready** — fair pulse timing is the product story; client countdown is the UX shell around the on-chain room lifecycle.
-- **Mobile** — Phantom in-app browser, large hit target, dual-ready start, minimal mid-game signing.
+- **Ephemeral Rollups (live)** — solo settle path: `start_round` → **`delegate_room`** (base) → **`tap_solo` on ER** → **`settle_and_undelegate`** → Solana. Falls back to base `finish_match` if ER is down.
+- **Verified** — `scripts/e2e-er.mjs` prints `ER_E2E_PASS` against `devnet-as.magicblock.app`.
+- **Mobile** — Phantom in-app browser, dual-ready start, 3-2-1, large hit target.
 
 ## Stack
 
