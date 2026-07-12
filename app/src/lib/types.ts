@@ -74,6 +74,8 @@ export type RoundState = {
     vrf?: string;
     tap?: string;
     settle?: string;
+    /** true when settle used MagicBlock ER */
+    er?: boolean;
   };
 };
 

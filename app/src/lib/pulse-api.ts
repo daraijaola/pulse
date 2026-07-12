@@ -17,6 +17,7 @@ import {
   fetchRoom,
   fetchRoomRaw,
 } from "./pulse-onchain";
+import { runErSettlePath } from "./pulse-er";
 import { getConnectedPublicKey } from "./wallet";
 import {
   playCountdownBeep,
@@ -207,10 +208,9 @@ function winnerFromChain(
 }
 
 /**
- * After the local match: ONE signature.
- * - Solo: finish_match(host, ghost)
- * - Multi: each player submits their tap (auto-settles when both present);
- *   if you're host and peer already tapped, finish_match as fallback.
+ * After the local match — prefer MagicBlock ER path, fall back to base.
+ * Solo ER: start → delegate → tap_solo/finish on ER → settle_and_undelegate
+ * Multi base: each player tap (auto-settle) — ER multi later
  */
 export async function settleRound(
   round: RoundState,
@@ -232,10 +232,26 @@ export async function settleRound(
     (!!raw0?.challenger && raw0.challenger !== null);
   const youAreHost = opts?.isHost ?? pk === raw0?.host;
 
-  // ── Solo / ghost: single finish_match ─────────────────
+  // ── Solo / ghost: MagicBlock ER first ─────────────────
   if (!isMulti) {
     const hostMs = youAreHost ? youMs : ghostMs;
     const challMs = youAreHost ? ghostMs : youMs;
+    const alreadyLive = raw0?.status === 2;
+
+    const er = await runErSettlePath(round.roomCode, pk, hostMs, challMs, {
+      alreadyLive,
+    });
+    if (er.ok && er.usedEr) {
+      if (er.sigs.delegate) sigs.delegate = er.sigs.delegate;
+      if (er.sigs.start) sigs.vrf = er.sigs.start;
+      if (er.sigs.finish) sigs.tap = er.sigs.finish;
+      if (er.sigs.undelegate) sigs.settle = er.sigs.undelegate;
+      sigs.er = true;
+      console.info("[pulse] ER settle path ok", er.sigs);
+      return { ...round, phase: "done", sigs };
+    }
+
+    console.warn("[pulse] ER path failed → base finish_match", er.error);
     try {
       sigs.settle = await onchainFinishMatch(
         round.roomCode,
@@ -243,9 +259,8 @@ export async function settleRound(
         hostMs,
         challMs,
       );
-      console.info("[pulse] finish_match (solo)", sigs.settle);
+      console.info("[pulse] finish_match (base fallback)", sigs.settle);
     } catch (e) {
-      // Older program without finish_match — soft message
       console.warn("[pulse] finish_match failed", e);
       throw new Error(
         e instanceof Error

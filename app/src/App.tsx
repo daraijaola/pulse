@@ -1470,16 +1470,28 @@ export default function App() {
               <div className="result-chamber__status">
                 {won ? "Winner locked" : "Round complete"} ·{" "}
                 {ms != null ? `${ms}ms reaction` : "—"}
-                {lastSigs?.settle
-                  ? lastSigs.settle.startsWith("mock")
-                    ? " · local result"
-                    : " · locked on Solana"
-                  : lastSigs?.tap
-                    ? " · score on-chain"
-                    : ""}
+                {lastSigs?.er
+                  ? " · MagicBlock ER → Solana"
+                  : lastSigs?.settle
+                    ? lastSigs.settle.startsWith("mock")
+                      ? " · local result"
+                      : " · locked on Solana"
+                    : lastSigs?.tap
+                      ? " · score on-chain"
+                      : ""}
               </div>
               {lastSigs && (
                 <div className="result-sigs">
+                  {lastSigs.delegate && (
+                    <a
+                      className="result-sigs__link"
+                      href={`https://explorer.solana.com/tx/${lastSigs.delegate}?cluster=devnet`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      delegate → ER
+                    </a>
+                  )}
                   {lastSigs.vrf &&
                     !String(lastSigs.vrf).startsWith("mock") &&
                     !String(lastSigs.vrf).startsWith("already") && (
@@ -1489,7 +1501,7 @@ export default function App() {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      ready signal
+                      start
                     </a>
                   )}
                   {lastSigs.tap && !String(lastSigs.tap).startsWith("mock") && (
@@ -1499,7 +1511,7 @@ export default function App() {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      score tx
+                      {lastSigs.er ? "tap on ER" : "score tx"}
                     </a>
                   )}
                   {lastSigs.settle &&
@@ -1511,7 +1523,7 @@ export default function App() {
                         target="_blank"
                         rel="noreferrer"
                       >
-                        lock result
+                        {lastSigs.er ? "commit + undelegate" : "lock result"}
                       </a>
                     )}
                 </div>
